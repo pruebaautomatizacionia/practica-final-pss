@@ -27,4 +27,4 @@ jobs:
           cd bootstrap # Navega al directorio donde está backend.tf
           terraform init
           terraform apply -auto-approve
-Displaying automatizacion-ci_accessKeys.csv.
+
