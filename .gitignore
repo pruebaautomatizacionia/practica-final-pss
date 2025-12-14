@@ -1,0 +1,19 @@
+# Archivos y directorios ignorados estándar de Terraform:
+# ------------------------------------------------------
+
+# El directorio temporal de dependencias (proveedores, módulos, etc.)
+.terraform/
+.terraform.lock.hcl
+
+# El archivo de estado local (que debe estar en S3, no en Git)
+terraform.tfstate
+terraform.tfstate.backup
+
+# Archivos generados después de 'terraform plan'
+*.tfplan
+
+# Logs de crash o diagnóstico
+crash.log
+
+# Directorios de módulos locales (si los usas)
+.terraform/modules

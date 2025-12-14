@@ -5,7 +5,7 @@ provider "aws" {
 }
 # Bucket S3 para guardar el archivo de estado de Terraform (.tfstate)
 resource "aws_s3_bucket" "tf_state_bucket" {
-  bucket = "infrabot-tf-state-pruebaautomatizaciónia"
+  bucket = "infrabot-tf-state-pruebaautomatizacionia"
   acl    = "private"
   
   versioning { # Habilitar versionado para poder recuperar estados anteriores
