@@ -1,62 +1,83 @@
 ```hcl
-# Nombre: terraform_aws_s3_bucket.tf
-# Ejemplo 1: Crear un bucket S3 privado en AWS
+# Nombre: terraform_aws_rds_database.tf
+# Ejemplo 1: Crear una base de datos MySQL en AWS RDS
 
 provider "aws" {
   region = "us-east-1"
 }
 
-resource "aws_s3_bucket" "my_bucket" {
-  bucket = "my-unique-terraform-bucket-12345" # El nombre del bucket debe ser globalmente único
+resource "aws_db_instance" "mysql_db" {
+  allocated_storage    = 20
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t3.micro"
+  name                 = "mydbinstance"
+  username             = "admin"
+  password             = "MySecurePassword123" # ¡ADVERTENCIA! No usar contraseñas hardcodeadas en producción. Usar secretos.
+  port                 = 3306
+  skip_final_snapshot  = true
+  publicly_accessible  = false
+  # Para fines de ejemplo, se asume que existe un VPC y un Security Group.
+  # En un entorno real, estos deberían ser definidos o referenciados.
+  # vpc_security_group_ids = [aws_security_group.db_sg.id]
+  # db_subnet_group_name   = aws_db_subnet_group.default.name
 
   tags = {
-    Environment = "Dev"
-    Project     = "TerraformExamples"
+    Name        = "my-mysql-db"
+    Environment = "Development"
   }
 }
 
-resource "aws_s3_bucket_acl" "my_bucket_acl" {
-  bucket = aws_s3_bucket.my_bucket.id
-  acl    = "private" # Establece el bucket como privado
+# Nombre: terraform_aws_iam_role.tf
+# Ejemplo 2: Crear un rol IAM con una política de solo lectura de S3
+
+provider "aws" {
+  region = "us-east-1"
 }
 
-resource "aws_s3_bucket_versioning" "my_bucket_versioning" {
-  bucket = aws_s3_bucket.my_bucket.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
+resource "aws_iam_role" "s3_read_only_role" {
+  name = "s3-read-only-role-for-app"
 
-# Nombre: terraform_azure_resource_group_and_storage_account.tf
-# Ejemplo 2: Crear un grupo de recursos y una cuenta de almacenamiento en Azure
-
-provider "azurerm" {
-  features {}
-}
-
-resource "azurerm_resource_group" "my_resource_group" {
-  name     = "terraform-example-rg"
-  location = "East US"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        },
+      },
+    ],
+  })
 
   tags = {
-    Environment = "Dev"
-    Project     = "TerraformExamples"
+    Project = "MyApplication"
+    Purpose = "S3ReadOnlyAccess"
   }
 }
 
-resource "azurerm_storage_account" "my_storage_account" {
-  name                     = "tfexamplediag1234" # Nombre de cuenta de almacenamiento debe ser globalmente único y solo minúsculas y números
-  resource_group_name      = azurerm_resource_group.my_resource_group.name
-  location                 = azurerm_resource_group.my_resource_group.location
-  account_tier             = "Standard"
-  account_replication_type = "GRS" # Geo-Redundant Storage
+resource "aws_iam_role_policy" "s3_read_only_policy" {
+  name = "s3-read-only-policy"
+  role = aws_iam_role.s3_read_only_role.id
 
-  tags = {
-    Environment = "Dev"
-    Project     = "TerraformExamples"
-  }
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "s3:Get*",
+          "s3:List*",
+        ],
+        Effect   = "Allow",
+        Resource = "*", # Limitar esto a buckets específicos en producción
+      },
+    ],
+  })
 }
 
-# Dado mi rol como agente experto en Terraform, no puedo generar código Ansible.
+# NOTA: Como agente experto en Terraform, y siguiendo la instrucción explícita
+# de generar "Solo lo que necesite terraform" y para un archivo ".tf",
+# el código de Ansible no puede ser incluido en esta respuesta.
 # La parte de Ansible es gestionada por otro agente.
 ```
