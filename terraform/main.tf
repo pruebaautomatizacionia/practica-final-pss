@@ -1,228 +1,190 @@
 ```hcl
-# Nombre: terraform_aws_eks_cluster.tf
-# Ejemplo 1: Configuración básica de un clúster de Amazon EKS
+# Nombre: terraform_aws_rds_instance.tf
+# Ejemplo 1: Creación de una instancia RDS de PostgreSQL en AWS
 
 provider "aws" {
   region = "us-east-1"
 }
 
-# Se asume que el proveedor de AWS y la configuración de autenticación ya están definidos.
-# También se asume que existe una VPC y subredes.
+# Se asume que existe una VPC, subredes y un grupo de seguridad configurado para la base de datos.
 
-data "aws_caller_identity" "current" {} # Obtiene información sobre la cuenta AWS actual
-
-locals {
-  cluster_name = "my-eks-cluster-${data.aws_caller_identity.current.account_id}"
-  cluster_version = "1.28" # Versión de Kubernetes para el clúster
+data "aws_vpc" "main" {
+  id = "vpc-0abcdef1234567890" # ¡REEMPLAZA con el ID de tu VPC!
 }
 
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "${local.cluster_name}-cluster-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "eks.amazonaws.com"
-        }
-      },
-    ]
-  })
+data "aws_subnet" "private_a" {
+  id = "subnet-0123456789abcdef0" # ¡REEMPLAZA con el ID de tu subred privada A!
+  vpc_id = data.aws_vpc.main.id
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy_attachment" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster_role.name
+data "aws_subnet" "private_b" {
+  id = "subnet-0fedcba9876543210" # ¡REEMPLAZA con el ID de tu subred privada B!
+  vpc_id = data.aws_vpc.main.id
 }
 
-resource "aws_eks_cluster" "my_eks" {
-  name     = local.cluster_name
-  role_arn = aws_iam_role.eks_cluster_role.arn
-  version  = local.cluster_version
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "rds-private-subnet-group"
+  subnet_ids = [data.aws_subnet.private_a.id, data.aws_subnet.private_b.id]
 
-  vpc_config {
-    # Reemplaza con los IDs de tu VPC y subredes existentes
-    subnet_ids = ["subnet-0abcdef1234567890", "subnet-0fedcba9876543210"] 
-    public_access = true # Permite la comunicación con el endpoint de la API desde fuera de la VPC (ajusta para producción)
+  tags = {
+    Name = "RDSSubnetGroup"
+  }
+}
+
+resource "aws_security_group" "rds_sg" {
+  name        = "rds-database-sg"
+  description = "Permitir acceso solo desde la aplicación web"
+  vpc_id      = data.aws_vpc.main.id
+
+  ingress {
+    description     = "Allow PostgreSQL from application SG"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = ["sg-0abcdef1234567890"] # ¡REEMPLAZA con el ID de tu Security Group de la aplicación!
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
-    Name = local.cluster_name
+    Name = "RDSDatabaseSG"
+  }
+}
+
+resource "aws_db_instance" "app_database" {
+  allocated_storage    = 20 # GB
+  engine               = "postgres"
+  engine_version       = "14.5"
+  instance_class       = "db.t3.micro"
+  identifier           = "my-app-database"
+  username             = "adminuser"
+  password             = "mySuperSecretPassword123!" # ¡REEMPLAZA con una contraseña segura! Considera usar secrets.
+  db_subnet_group_name = aws_db_subnet_group.rds_subnet_group.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  skip_final_snapshot  = true # Para entornos de desarrollo/pruebas. En producción, déjalo en 'false'.
+  publicly_accessible  = false # Asegura que la BD no sea accesible públicamente
+
+  tags = {
+    Name        = "MyAppDatabase"
     Environment = "Development"
   }
 }
 
-# Se necesita un nodo de trabajo para que el clúster sea funcional.
-# Aquí se crea un grupo de nodos administrado por EKS.
-resource "aws_iam_role" "eks_node_group_role" {
-  name = "${local.cluster_name}-node-group-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      },
-    ]
-  })
+output "rds_instance_endpoint" {
+  description = "El endpoint de la instancia RDS de PostgreSQL."
+  value       = aws_db_instance.app_database.endpoint
 }
 
-resource "aws_iam_role_policy_attachment" "eks_node_group_policy_attachment" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_node_group_role.name
+output "rds_instance_username" {
+  description = "El nombre de usuario de la instancia RDS."
+  value       = aws_db_instance.app_database.username
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cni_policy_attachment" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_node_group_role.name
+# Nombre: terraform_azure_virtual_machine.tf
+# Ejemplo 2: Creación de una máquina virtual Linux en Azure
+
+provider "azurerm" {
+  features {}
 }
 
-resource "aws_eks_node_group" "worker_nodes" {
-  cluster_name    = aws_eks_cluster.my_eks.name
-  node_group_name = "${local.cluster_name}-node-group"
-  node_role_arn   = aws_iam_role.eks_node_group_role.arn
-  subnet_ids      = ["subnet-0abcdef1234567890", "subnet-0fedcba9876543210"] # Mismas subredes que el clúster
-
-  scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 1
-  }
-
-  # Opcional: Puedes especificar una AMI específica o dejar que EKS la gestione.
-  # ami = "ami-xxxxxxxxxxxxxxxxx" 
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_policy_attachment,
-    aws_iam_role_policy_attachment.eks_cni_policy_attachment,
-  ]
+resource "azurerm_resource_group" "example" {
+  name     = "rg-terraform-example"
+  location = "East US"
 }
 
-output "eks_cluster_name" {
-  description = "El nombre del clúster EKS."
-  value       = aws_eks_cluster.my_eks.name
+resource "azurerm_virtual_network" "example" {
+  name                = "vnet-terraform-example"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
 }
 
-output "eks_cluster_endpoint" {
-  description = "El endpoint de la API del clúster EKS."
-  value       = aws_eks_cluster.my_eks.endpoint
+resource "azurerm_subnet" "example" {
+  name                 = "subnet-terraform-example"
+  resource_group_name  = azurerm_resource_group.example.name
+  virtual_network_name = azurerm_virtual_network.example.name
+  address_prefix       = "10.0.1.0/24"
 }
 
-# Nombre: terraform_aws_lambda_function.tf
-# Ejemplo 2: Crear una función Lambda simple en AWS y un trigger API Gateway
-
-provider "aws" {
-  region = "us-east-1"
+resource "azurerm_public_ip" "example" {
+  name                = "pip-terraform-example"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+  allocation_method   = "Dynamic" # O "Static" si necesitas una IP fija
 }
 
-resource "aws_iam_role" "lambda_execution_role" {
-  name = "lambda-execution-role-example"
+resource "azurerm_network_security_group" "example" {
+  name                = "nsg-terraform-example"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Action = "sts:AssumeRole",
-        Effect = "Allow",
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        },
-      },
-    ],
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_logs_policy" {
-  role       = aws_iam_role.lambda_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_lambda_function" "hello_world_lambda" {
-  filename         = "lambda_functions/hello_world.zip" # Archivo ZIP de tu función Lambda. Necesitas crearlo.
-  function_name    = "hello-world-lambda-example"
-  role             = aws_iam_role.lambda_execution_role.arn
-  handler          = "index.handler" # El archivo y la función a ejecutar (ej. index.js, main.py)
-  runtime          = "python3.9" # O el runtime que prefieras, e.j., nodejs18.x, java11
-
-  source_code_hash = filebase64sha256("lambda_functions/hello_world.zip") # Para que Terraform detecte cambios
-
-  environment {
-    variables = {
-      MY_ENV_VAR = "some_value"
-    }
-  }
-
-  tags = {
-    Name = "HelloWorldLambda"
-    Project = "TerraformExamples"
+  security_rule {
+    name                       = "SSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*" # ¡RESTRINGIR en producción!
+    destination_address_prefix = "*"
   }
 }
 
-resource "aws_api_gateway_rest_api" "api_gateway" {
-  name        = "my-lambda-api"
-  description = "API Gateway para acceder a la función Lambda"
-}
+resource "azurerm_network_interface" "example" {
+  name                = "nic-terraform-example"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
 
-resource "aws_api_gateway_resource" "proxy_resource" {
-  rest_api_id = aws_api_gateway_rest_api.api_gateway.id
-  parent_id   = aws_api_gateway_rest_api.api_gateway.root_resource_id
-  path_part   = "{proxy+}" # Captura cualquier ruta
-}
-
-resource "aws_api_gateway_method" "proxy_method" {
-  rest_api_id   = aws_api_gateway_rest_api.api_gateway.id
-  resource_id   = aws_api_gateway_resource.proxy_resource.id
-  http_method   = "ANY" # Acepta cualquier método HTTP (GET, POST, etc.)
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_integration" "lambda_integration" {
-  rest_api_id             = aws_api_gateway_rest_api.api_gateway.id
-  resource_id             = aws_api_gateway_resource.proxy_resource.id
-  http_method             = aws_api_gateway_method.proxy_method.http_method
-  type                    = "AWS_PROXY" # Integración Lambda proxy
-  integration_http_method = "POST" # El método que API Gateway usa para llamar a Lambda
-  uri                     = aws_lambda_function.hello_world_lambda.invoke_arn
-}
-
-resource "aws_api_gateway_deployment" "api_deployment" {
-  rest_api_id = aws_api_gateway_rest_api.api_gateway.id
-
-  lifecycle {
-    create_before_destroy = true # Asegura que la implementación anterior se elimine antes de crear una nueva
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.example.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.example.id
   }
 }
 
-resource "aws_api_gateway_stage" "api_stage" {
-  deployment_id = aws_api_gateway_deployment.api_deployment.id
-  rest_api_id   = aws_api_gateway_rest_api.api_gateway.id
-  stage_name    = "prod" # Nombre del entorno (ej. 'dev', 'staging', 'prod')
+resource "azurerm_network_interface_security_group_association" "example" {
+  network_interface_id      = azurerm_network_interface.example.id
+  network_security_group_id = azurerm_network_security_group.example.id
 }
 
-# Otorgar permiso a API Gateway para invocar la función Lambda
-resource "aws_lambda_permission" "api_gateway_invoke" {
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.hello_world_lambda.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.api_gateway.id}/*/${aws_api_gateway_method.proxy_method.http_method}${aws_api_gateway_resource.proxy_resource.path}"
+resource "azurerm_linux_virtual_machine" "example" {
+  name                            = "vm-terraform-example"
+  location                        = azurerm_resource_group.example.location
+  resource_group_name             = azurerm_resource_group.example.name
+  network_interface_ids           = [azurerm_network_interface.example.id]
+  size                            = "Standard_B1s" # Tamaño de la VM
+  admin_username                  = "azureuser"
+  network_interface_ids           = [azurerm_network_interface.example.id]
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = file("~/.ssh/id_rsa.pub") # ¡ASEGÚRATE de que esta clave pública exista!
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
 }
 
-data "aws_region" "current" {}
-data "aws_caller_identity" "current" {} # Necesario para el ARN de la fuente
-
-output "api_gateway_url" {
-  description = "URL para acceder a la función Lambda a través de API Gateway."
-  value       = aws_api_gateway_stage.api_stage.invoke_url
+output "vm_public_ip" {
+  description = "La dirección IP pública de la máquina virtual."
+  value       = azurerm_public_ip.example.ip_address
 }
 
-# NOTA: Según las instrucciones de formato críticas, solo se debe generar código Terraform (.tf).
-# La inclusión de código Ansible no es posible en este contexto, ya que pertenece a un formato y agente diferente.
+# NOTA: De acuerdo con las instrucciones de formato críticas, solo se proporciona código Terraform (.tf).
+# El código Ansible no es compatible con el formato de archivo .tf y es gestionado por otro agente.
 ```
