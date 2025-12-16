@@ -61,137 +61,139 @@
         name: "{{ app_service_name }}"
         state: reloaded
 ---
-# Nombre: ansible_install_docker_and_compose.yml
-# Playbook Ansible para instalar Docker Engine y Docker Compose
+# Nombre: terraform_aws_s3_bucket.tf
+# Ejemplo 1: Creación de un bucket S3 básico en AWS
 
-- hosts: docker_hosts
-  become: true
+provider "aws" {
+  region = "us-east-1" # Reemplaza con tu región preferida
+}
 
-  tasks:
-    - name: Eliminar paquetes de Docker viejos (si existen)
-      package:
-        name: "{{ item }}"
-        state: absent
-      loop:
-        - docker
-        - docker-engine
-        - docker.io
-        - docker-ce
-        - docker-ce-cli
-        - containerd.io
-        - docker-buildx-plugin
-        - docker-compose-plugin
-      when: ansible_os_family == "Debian"
+resource "aws_s3_bucket" "example_bucket" {
+  bucket = "mi-ejemplo-bucket-terraform-${random_id.bucket_suffix.hex}" # Nombre único para el bucket S3
 
-    - name: Actualizar caché de apt (Debian/Ubuntu)
-      apt:
-        update_cache: yes
-      when: ansible_os_family == "Debian"
+  tags = {
+    Name        = "MyExampleBucket"
+    Environment = "Development"
+  }
+}
 
-    - name: Instalar paquetes necesarios para Docker (Debian/Ubuntu)
-      package:
-        name: "{{ item }}"
-        state: present
-      loop:
-        - ca-certificates
-        - curl
-        - gnupg
-        - lsb-release
-      when: ansible_os_family == "Debian"
+# Genera un sufijo aleatorio para asegurar la unicidad del nombre del bucket
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
 
-    - name: Agregar la clave GPG oficial de Docker
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
-      when: ansible_os_family == "Debian"
+resource "aws_s3_bucket_acl" "example_bucket_acl" {
+  bucket = aws_s3_bucket.example_bucket.id
+  acl    = "private" # Asegura que el bucket sea privado por defecto
+}
 
-    - name: Agregar el repositorio APT de Docker
-      apt_repository:
-        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "Debian"
+output "s3_bucket_name" {
+  description = "El nombre del bucket S3 creado."
+  value       = aws_s3_bucket.example_bucket.bucket
+}
 
-    - name: Instalar Docker Engine, CLI, Containerd y plugins
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "Debian"
+output "s3_bucket_domain_name" {
+  description = "El nombre de dominio del bucket S3."
+  value       = aws_s3_bucket.example_bucket.bucket_domain_name
+}
 
-    - name: Asegurar que Docker esté iniciado y habilitado
-      service:
-        name: docker
-        state: started
-        enabled: yes
+# Nombre: terraform_azure_vm_with_ssh_key.tf
+# Ejemplo 2: Creación de una máquina virtual Linux en Azure con acceso SSH a través de clave pública
 
-    - name: Añadir el usuario actual al grupo 'docker' para ejecutar sin sudo (opcional)
-      user:
-        name: "{{ ansible_user }}" # Usuario que ejecuta Ansible
-        groups: docker
-        append: yes
-      when: ansible_os_family == "Debian"
----
-# Nombre: ansible_configure_firewall_ufw.yml
-# Playbook Ansible para configurar el firewall UFW (Uncomplicated Firewall)
+provider "azurerm" {
+  features {}
+}
 
-- hosts: all
-  become: true
+resource "azurerm_resource_group" "vm_rg" {
+  name     = "rg-terraform-vm-ssh"
+  location = "East US" # Reemplaza con tu región preferida
+}
 
-  vars:
-    # Lista de puertos y protocolos permitidos
-    allowed_ports:
-      - { port: "22", proto: "tcp" }  # SSH
-      - { port: "80", proto: "tcp" }  # HTTP
-      - { port: "443", proto: "tcp" } # HTTPS
-    # Puedes añadir más reglas aquí, por ejemplo, para permitir conexiones a Docker
-    # - { rule: "allow", name: "docker" }
+resource "azurerm_virtual_network" "vm_vnet" {
+  name                = "vnet-tf-vm-ssh"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.vm_rg.location
+  resource_group_name = azurerm_resource_group.vm_rg.name
+}
 
-  tasks:
-    - name: Asegurar que UFW esté instalado
-      package:
-        name: ufw
-        state: present
-      when: ansible_os_family == "Debian"
+resource "azurerm_subnet" "vm_subnet" {
+  name                 = "subnet-tf-vm-ssh"
+  resource_group_name  = azurerm_resource_group.vm_rg.name
+  virtual_network_name = azurerm_virtual_network.vm_vnet.name
+  address_prefix       = "10.0.1.0/24"
+}
 
-    - name: Establecer política por defecto (denegar entrada, permitir salida)
-      ufw:
-        state: enabled
-        policy: deny
-        direction: incoming
-      when: ansible_os_family == "Debian"
+resource "azurerm_public_ip" "vm_public_ip" {
+  name                = "pip-tf-vm-ssh"
+  location            = azurerm_resource_group.vm_rg.location
+  resource_group_name = azurerm_resource_group.vm_rg.name
+  allocation_method   = "Static" # Asignación estática de IP pública
+}
 
-    - name: Permitir tráfico en los puertos especificados
-      ufw:
-        rule: allow
-        port: "{{ item.port }}"
-        proto: "{{ item.proto }}"
-      loop: "{{ allowed_ports }}"
-      when: ansible_os_family == "Debian"
-      notify:
-        - Recargar UFW
+resource "azurerm_network_security_group" "vm_nsg" {
+  name                = "nsg-tf-vm-ssh"
+  location            = azurerm_resource_group.vm_rg.location
+  resource_group_name = azurerm_resource_group.vm_rg.name
 
-    # Ejemplo de cómo permitir un servicio específico (si está definido en /etc/ufw/applications.d/)
-    # - name: Permitir tráfico para el servicio 'Nginx Full'
-    #   ufw:
-    #     rule: allow
-    #     name: "Nginx Full"
-    #   when: ansible_os_family == "Debian"
-    #   notify:
-    #     - Recargar UFW
+  security_rule {
+    name                       = "AllowSSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*" # ¡RESTRINGIR a IPs específicas en entornos de producción!
+    destination_address_prefix = "*"
+  }
+}
 
-    - name: Permitir todo el tráfico saliente
-      ufw:
-        direction: outgoing
-        policy: allow
-      when: ansible_os_family == "Debian"
+resource "azurerm_network_interface" "vm_nic" {
+  name                = "nic-tf-vm-ssh"
+  location            = azurerm_resource_group.vm_rg.location
+  resource_group_name = azurerm_resource_group.vm_rg.name
 
-  handlers:
-    - name: Recargar UFW
-      command: sudo ufw reload
-      when: ansible_os_family == "Debian"
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.vm_subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.vm_public_ip.id
+  }
+}
+
+resource "azurerm_network_interface_security_group_association" "vm_nsg_assoc" {
+  network_interface_id      = azurerm_network_interface.vm_nic.id
+  network_security_group_id = azurerm_network_security_group.vm_nsg.id
+}
+
+resource "azurerm_linux_virtual_machine" "vm_instance" {
+  name                            = "vm-tf-ssh-example"
+  location                        = azurerm_resource_group.vm_rg.location
+  resource_group_name             = azurerm_resource_group.vm_rg.name
+  network_interface_ids           = [azurerm_network_interface.vm_nic.id]
+  size                            = "Standard_B1s" # Tamaño de la VM
+  admin_username                  = "azureuser"
+  disable_password_authentication = true
+
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = file("~/.ssh/id_rsa.pub") # Asegúrate de tener este archivo de clave pública SSH.
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
+}
+
+output "vm_public_ip_address" {
+  description = "La dirección IP pública de la máquina virtual Azure."
+  value       = azurerm_public_ip.vm_public_ip.ip_address
+}
