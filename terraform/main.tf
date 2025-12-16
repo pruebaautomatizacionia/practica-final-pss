@@ -1,94 +1,62 @@
 ```hcl
-# Nombre: terraform_aws_vpc.tf
-# Ejemplo 1: Crear una VPC en AWS
+# Nombre: terraform_aws_s3_bucket.tf
+# Ejemplo 1: Crear un bucket S3 privado en AWS
 
 provider "aws" {
   region = "us-east-1"
 }
 
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
+resource "aws_s3_bucket" "my_bucket" {
+  bucket = "my-unique-terraform-bucket-12345" # El nombre del bucket debe ser globalmente único
 
   tags = {
-    Name = "main-vpc"
+    Environment = "Dev"
+    Project     = "TerraformExamples"
   }
 }
 
-resource "aws_subnet" "public_subnet" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true
+resource "aws_s3_bucket_acl" "my_bucket_acl" {
+  bucket = aws_s3_bucket.my_bucket.id
+  acl    = "private" # Establece el bucket como privado
+}
+
+resource "aws_s3_bucket_versioning" "my_bucket_versioning" {
+  bucket = aws_s3_bucket.my_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Nombre: terraform_azure_resource_group_and_storage_account.tf
+# Ejemplo 2: Crear un grupo de recursos y una cuenta de almacenamiento en Azure
+
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "my_resource_group" {
+  name     = "terraform-example-rg"
+  location = "East US"
 
   tags = {
-    Name = "public-subnet"
+    Environment = "Dev"
+    Project     = "TerraformExamples"
   }
 }
 
-resource "aws_internet_gateway" "internet_gateway" {
-  vpc_id = aws_vpc.main.id
+resource "azurerm_storage_account" "my_storage_account" {
+  name                     = "tfexamplediag1234" # Nombre de cuenta de almacenamiento debe ser globalmente único y solo minúsculas y números
+  resource_group_name      = azurerm_resource_group.my_resource_group.name
+  location                 = azurerm_resource_group.my_resource_group.location
+  account_tier             = "Standard"
+  account_replication_type = "GRS" # Geo-Redundant Storage
 
   tags = {
-    Name = "internet-gateway"
+    Environment = "Dev"
+    Project     = "TerraformExamples"
   }
 }
 
-resource "aws_route_table" "public_route_table" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.internet_gateway.id
-  }
-
-  tags = {
-    Name = "public-route-table"
-  }
-}
-
-resource "aws_route_table_association" "public_association" {
-  subnet_id      = aws_subnet.public_subnet.id
-  route_table_id = aws_route_table.public_route_table.id
-}
-
-# Nombre: terraform_aws_ec2_instance.tf
-# Ejemplo 2: Crear una instancia EC2 en AWS
-
-resource "aws_instance" "web" {
-  ami                    = "ami-0c55b159cbfafe1f0" # Amazon Linux 2
-  instance_type         = "t2.micro"
-  key_name              = "my-key-pair"
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
-
-  tags = {
-    Name = "web-instance"
-  }
-}
-
-resource "aws_security_group" "web_sg" {
-  name        = "web-sg"
-  description = "Allow HTTP and SSH inbound traffic"
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
+# Dado mi rol como agente experto en Terraform, no puedo generar código Ansible.
+# La parte de Ansible es gestionada por otro agente.
 ```
