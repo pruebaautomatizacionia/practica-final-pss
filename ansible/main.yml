@@ -1,133 +1,186 @@
 ```yaml
 ---
-# Nombre: ansible_manage_users.yml
-# Playbook Ansible para crear un usuario, añadirlo a un grupo y configurar SSH Keys
+# Nombre: ansible_deploy_web_app.yml
+# Playbook Ansible para desplegar una aplicación web simple, descargarla y configurar Nginx
 
-- hosts: all
+- hosts: web_servers
   become: true # Ejecutar tareas con privilegios de root
 
   vars:
-    new_user_name: appuser
-    new_user_group: sudo # O 'docker', 'www-data', etc.
-    ssh_key_content: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..." # ¡REEMPLAZA con tu clave pública SSH real!
+    app_repo_url: "https://github.com/ejemplo/mi-aplicacion-web.git" # URL del repositorio de la app
+    app_dest_path: "/var/www/mi-aplicacion-web"
+    app_service_name: nginx
+    app_port: 80
 
   tasks:
-    - name: Crear grupo "{{ new_user_group }}" si no existe
-      group:
-        name: "{{ new_user_group }}"
-        state: present
-
-    - name: Crear usuario "{{ new_user_name }}"
-      user:
-        name: "{{ new_user_name }}"
-        group: "{{ new_user_group }}"
-        groups: "{{ new_user_group }}" # Asegura que el usuario sea parte del grupo
-        append: yes # Añadir a grupos existentes si ya es miembro
-        shell: /bin/bash # Shell por defecto
-        create_home: yes # Crear directorio home
-        state: present
-
-    - name: Crear directorio .ssh para el nuevo usuario
-      file:
-        path: "/home/{{ new_user_name }}/.ssh"
-        state: directory
-        owner: "{{ new_user_name }}"
-        group: "{{ new_user_name }}"
-        mode: '0700'
-
-    - name: Añadir clave pública SSH para el nuevo usuario
-      copy:
-        content: "{{ ssh_key_content }}"
-        dest: "/home/{{ new_user_name }}/.ssh/authorized_keys"
-        owner: "{{ new_user_name }}"
-        group: "{{ new_user_name }}"
-        mode: '0600'
-```
-
-```yaml
----
-# Nombre: ansible_install_monitoring_tools.yml
-# Playbook Ansible para instalar herramientas de monitoreo básicas (htop, iftop, iotop)
-# compatible con sistemas basados en Debian y RedHat.
-
-- hosts: monitoring_targets
-  become: true
-
-  vars:
-    monitoring_packages:
-      - htop
-      - iftop
-      - iotop
-      - sysstat # Para herramientas como iostat, mpstat
-
-  tasks:
-    - name: Actualizar caché de apt (Debian/Ubuntu)
+    - name: Actualizar caché de apt
       apt:
         update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Instalar paquetes de monitoreo (Debian/Ubuntu)
-      apt:
-        name: "{{ monitoring_packages }}"
+    - name: Instalar Git y Nginx
+      package:
+        name: "{{ item }}"
         state: present
+      loop:
+        - git
+        - nginx
       when: ansible_os_family == "Debian"
 
-    - name: Actualizar caché de yum/dnf (RedHat/CentOS/Fedora)
-      yum:
-        update_cache: yes
-      when: ansible_os_family == "RedHat"
+    - name: Clonar o actualizar el repositorio de la aplicación
+      git:
+        repo: "{{ app_repo_url }}"
+        dest: "{{ app_dest_path }}"
+        update: yes # Clona si no existe, o actualiza si ya existe
 
-    - name: Instalar paquetes de monitoreo (RedHat/CentOS/Fedora)
-      yum:
-        name: "{{ monitoring_packages }}"
-        state: present
-      when: ansible_os_family == "RedHat"
-```
-
-```yaml
----
-# Nombre: ansible_configure_application_settings.yml
-# Playbook Ansible para configurar un archivo de propiedades de aplicación y reiniciar el servicio
-
-- hosts: app_servers
-  become: true
-
-  vars:
-    app_config_path: /etc/myapp/application.properties
-    app_service_name: myapp
-    db_host: db.example.com
-    db_port: 5432
-    db_user: appuser
-    db_name: mydatabase
-
-  tasks:
-    - name: Crear directorio de configuración de la aplicación si no existe
-      file:
-        path: /etc/myapp
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Generar archivo de configuración de la aplicación
+    - name: Configurar Nginx para servir la aplicación
       template:
-        src: templates/application.properties.j2 # Necesitarás crear este archivo template
-        dest: "{{ app_config_path }}"
-        owner: myappuser # Usuario bajo el que se ejecuta la app
-        group: myappgroup # Grupo bajo el que se ejecuta la app
-        mode: '0640'
+        src: templates/nginx_app.conf.j2 # Necesitarás crear este archivo template en un subdirectorio 'templates'
+        dest: "/etc/nginx/sites-available/mi-aplicacion-web"
       notify:
-        - Reiniciar servicio de aplicación
+        - Recargar Nginx
 
-    - name: Asegurar que el servicio de la aplicación esté iniciado
-      systemd:
+    - name: Habilitar la configuración del sitio Nginx
+      file:
+        src: "/etc/nginx/sites-available/mi-aplicacion-web"
+        dest: "/etc/nginx/sites-enabled/mi-aplicacion-web"
+        state: link
+      notify:
+        - Recargar Nginx
+
+    - name: Eliminar configuración por defecto de Nginx si existe (opcional)
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+      notify:
+        - Recargar Nginx
+
+    - name: Asegurar que Nginx esté iniciado y habilitado
+      service:
         name: "{{ app_service_name }}"
         state: started
         enabled: yes
 
   handlers:
-    - name: Reiniciar servicio de aplicación
-      systemd:
+    - name: Recargar Nginx
+      service:
         name: "{{ app_service_name }}"
+        state: reloaded
+
+---
+# Nombre: ansible_install_docker.yml
+# Playbook Ansible para instalar Docker Engine en sistemas basados en Debian y RedHat
+
+- hosts: docker_hosts
+  become: true
+
+  tasks:
+    - name: Agregar la clave GPG oficial de Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      when: ansible_os_family == "Debian"
+      # Nota: En sistemas RedHat, el método puede ser diferente (ej. bajar y ejecutar un script).
+      # Este ejemplo se enfoca en Debian/Ubuntu para simplificar.
+
+    - name: Agregar el repositorio APT de Docker
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Instalar Docker CE, CLI, Containerd y plugins (Debian/Ubuntu)
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Asegurar que Docker esté iniciado y habilitado
+      service:
+        name: docker
+        state: started
+        enabled: yes
+```
+
+```yaml
+---
+# Nombre: ansible_configure_database_user.yml
+# Playbook Ansible para crear un usuario de base de datos PostgreSQL y otorgarle permisos
+
+- hosts: db_servers
+  become: true # Si se necesita acceso a binarios de PostgreSQL como superusuario
+
+  vars:
+    db_user: app_db_user
+    db_password: "secure_password_for_app_user" # ¡IMPORTANTE! Considera usar Ansible Vault para esto.
+    db_name: app_database
+    pg_listen_addresses: "*" # Permite conexiones desde cualquier IP (¡restringir en producción!)
+
+  tasks:
+    - name: Instalar PostgreSQL (si no está instalado)
+      package:
+        name: "postgresql"
+        state: present
+      when: ansible_os_family == "Debian"
+
+    # Nota: Para sistemas RedHat, el paquete y el servicio pueden ser 'postgresql-server' y 'postgresql'.
+
+    - name: Asegurar que PostgreSQL esté iniciado y habilitado
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Configurar PostgreSQL para aceptar conexiones externas (pg_hba.conf)
+      lineinfile:
+        path: /etc/postgresql/{{ ansible_pkg_mgr_version }}/main/pg_hba.conf # Ajusta la ruta según tu versión/SO
+        line: "host    {{ db_name }}    {{ db_user }}    0.0.0.0/0    md5"
+        state: present
+        backup: yes
+      notify:
+        - Reiniciar PostgreSQL
+
+    - name: Configurar PostgreSQL para escuchar en todas las interfaces (postgresql.conf)
+      lineinfile:
+        path: /etc/postgresql/{{ ansible_pkg_mgr_version }}/main/postgresql.conf # Ajusta la ruta
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = '{{ pg_listen_addresses }}'"
+        state: present
+        backup: yes
+      notify:
+        - Reiniciar PostgreSQL
+
+    - name: Crear base de datos "{{ db_name }}" si no existe
+      postgresql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_user: postgres # Asume que el usuario 'postgres' tiene acceso
+
+    - name: Crear usuario de base de datos "{{ db_user }}" si no existe
+      postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        state: present
+        login_user: postgres
+        priv: ALL # Otorgar todos los privilegios al usuario
+
+    - name: Otorgar todos los privilegios en la base de datos "{{ db_name }}" al usuario "{{ db_user }}"
+      postgresql_user:
+        db_name: "{{ db_name }}"
+        name: "{{ db_user }}"
+        state: present
+        login_user: postgres
+        priv: ALL # Nuevamente, asegurar privilegios
+
+  handlers:
+    - name: Reiniciar PostgreSQL
+      service:
+        name: postgresql
         state: restarted
 ```
