@@ -15,7 +15,7 @@ jobs:
     defaults:
       run:
         # Todos los comandos de Terraform se ejecutarán en el subdirectorio 'terraform'
-        # ya que 'main.tf' se encuentra en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/terraform
+        # Esto es crucial porque 'main.tf' se encuentra en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/terraform
         working-directory: terraform
 
     steps:
@@ -25,7 +25,9 @@ jobs:
       - name: Configurar Terraform
         uses: hashicorp/setup-terraform@v2 # Configura Terraform CLI
         with:
-          # Se recomienda especificar una versión específica o un rango compatible, e.g., "1.5.x"
+          # Se recomienda especificar una versión específica o un rango compatible,
+          # para asegurar que el workflow sea reproducible y estable.
+          # Por ejemplo, "1.5.x" o "1.5.7".
           terraform_version: 1.x.x 
 
       - name: Inicializar Terraform
@@ -40,7 +42,9 @@ jobs:
         id: plan
         # Para que 'terraform plan' pueda interactuar con AWS, necesita credenciales.
         # Asegúrate de que los secretos AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY
-        # estén configurados en los ajustes de tu repositorio de GitHub (Settings -> Secrets and variables -> Actions).
+        # estén configurados en los ajustes de tu repositorio de GitHub:
+        # Settings -> Secrets and variables -> Actions -> New repository secret.
+        # Estos secretos son accesibles como ${{ secrets.NOMBRE_DEL_SECRETO }}.
         run: terraform plan -no-color
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -48,8 +52,9 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1 # Ajusta esta región si tu main.tf usa otra
 
       - name: Mostrar el resultado del plan de Terraform
-        # Este paso es útil para que el plan sea visible directamente en los logs del Pull Request.
-        # Permite revisar los cambios propuestos antes de una fusión.
+        # Este paso es extremadamente útil para el proceso de Pull Request.
+        # Permite a los revisores ver los cambios propuestos en la infraestructura
+        # directamente en los logs del workflow antes de fusionar el código.
         run: |
           echo "Plan de Terraform generado:"
           echo "${{ steps.plan.outputs.stdout }}"
@@ -61,7 +66,7 @@ jobs:
     defaults:
       run:
         # Todos los comandos de Ansible se ejecutarán en el subdirectorio 'ansible'
-        # ya que 'main.yml' se encuentra en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/ansible
+        # Esto es crucial porque 'main.yml' se encuentra en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/ansible
         working-directory: ansible
 
     steps:
@@ -71,22 +76,23 @@ jobs:
       - name: Configurar Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x' # Instala la última versión de Python 3
+          python-version: '3.x' # Instala la última versión estable de Python 3, ya que Ansible es una herramienta basada en Python.
 
       - name: Instalar Ansible y dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install ansible ansible-lint # Instala Ansible y ansible-lint para validar mejores prácticas
+          pip install ansible ansible-lint # Instala Ansible para ejecutar playbooks y ansible-lint para validar mejores prácticas y estilo.
 
       - name: Ejecutar Ansible Lint
-        # ansible-lint ayuda a identificar problemas de estilo, rendimiento y seguridad en los playbooks.
+        # ansible-lint es una herramienta invaluable que ayuda a identificar problemas de estilo,
+        # posibles errores, rendimiento y seguridad en los playbooks de Ansible.
         # El '|| true' permite que el workflow continúe incluso si ansible-lint encuentra solo advertencias.
-        # Si prefieres que el PR falle ante cualquier advertencia de linting, elimina '|| true'.
+        # Si prefieres que el Pull Request falle ante CUALQUIER advertencia de linting, elimina '|| true'.
         run: ansible-lint main.yml || true
 
       - name: Chequear la sintaxis del playbook de Ansible
-        # Esto solo valida la sintaxis del archivo YAML del playbook.
-        # No ejecuta ninguna tarea ni comprueba la existencia de archivos o roles referenciados,
-        # solo asegura que el formato del playbook es válido.
+        # Este comando es una comprobación fundamental. Solo valida la sintaxis del archivo YAML del playbook.
+        # NO ejecuta ninguna tarea en servidores remotos ni comprueba la existencia de archivos, roles
+        # o variables referenciadas, solo asegura que el formato del playbook es válido.
         run: ansible-playbook --syntax-check main.yml
 ```
