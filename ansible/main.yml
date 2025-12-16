@@ -1,154 +1,122 @@
 ```yaml
 ---
-# Nombre: ansible_install_apache.yml
-# Playbook Ansible para instalar y configurar Apache en un servidor Ubuntu
+# Nombre: ansible_install_nginx.yml
+# Playbook Ansible para instalar y configurar NGINX en un servidor Ubuntu
 
 - hosts: web_servers
   become: true
+  vars:
+    nginx_port: 80
 
   tasks:
     - name: Actualizar caché de apt
       apt:
         update_cache: yes
 
-    - name: Instalar Apache
+    - name: Instalar NGINX
       apt:
-        name: apache2
+        name: nginx
         state: present
 
-    - name: Asegurar que Apache esté iniciado y habilitado
+    - name: Copiar archivo de configuración de NGINX personalizado
+      copy:
+        src: files/nginx.conf.j2  # Asegúrate de tener este archivo localmente
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Recargar NGINX
+
+    - name: Asegurar que NGINX esté iniciado y habilitado
       service:
-        name: apache2
+        name: nginx
         state: started
         enabled: yes
 
-    - name: Copiar archivo de configuración por defecto de Apache
-      copy:
-        src: files/default_apache.conf
-        dest: /etc/apache2/sites-available/000-default.conf
-      notify:
-        - Reiniciar Apache
-
-    - name: Copiar página de índice HTML simple
-      copy:
-        content: "<h1>¡Hola desde Ansible y Apache!</h1>"
-        dest: /var/www/html/index.html
-
   handlers:
-    - name: Reiniciar Apache
+    - name: Recargar NGINX
       service:
-        name: apache2
-        state: restarted
+        name: nginx
+        state: reloaded
 ```
 
 ```yaml
 ---
-# Nombre: ansible_install_postgresql.yml
-# Playbook Ansible para instalar y configurar PostgreSQL en un servidor Ubuntu
+# Nombre: ansible_create_user_and_group.yml
+# Playbook Ansible para crear un usuario y un grupo en los servidores
 
-- hosts: db_servers
+- hosts: all
   become: true
+  vars:
+    new_username: appuser
+    new_groupname: appgroup
+    user_password: "{{ lookup('ansible.builtin.env', 'APP_USER_PASSWORD') }}" # Usar una variable de entorno
 
   tasks:
-    - name: Actualizar caché de apt
-      apt:
-        update_cache: yes
-
-    - name: Instalar PostgreSQL
-      apt:
-        name: postgresql
+    - name: Crear grupo de la aplicación si no existe
+      group:
+        name: "{{ new_groupname }}"
         state: present
 
-    - name: Asegurar que PostgreSQL esté iniciado y habilitado
-      service:
-        name: postgresql
-        state: started
-        enabled: yes
-
-    - name: Crear usuario de base de datos
-      postgresql_user:
-        name: appuser
-        password: my_secure_password
+    - name: Crear usuario de la aplicación si no existe
+      user:
+        name: "{{ new_username }}"
+        group: "{{ new_groupname }}"
+        password: "{{ user_password | password_hash('sha512') }}" # Hashear la contraseña
+        shell: /bin/bash
         state: present
+        create_home: yes
 
-    - name: Crear base de datos
-      postgresql_db:
-        name: myappdb
-        owner: appuser
-        state: present
-
-    - name: Permitir conexiones desde cualquier host (peligroso para producción, ajustar CIDR)
-      lineinfile:
-        path: /etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf
-        regexp: "^#host    all             all             127.0.0.1/32            md5"
-        line: "host    all             all             0.0.0.0/0               md5"
-        backup: yes
-      when: ansible_os_family == "Debian" # Ajustar según tu SO y versión de PG
-
-    - name: Configurar PostgreSQL para escuchar en todas las interfaces
-      lineinfile:
-        path: /etc/postgresql/{{ postgresql_version }}/main/postgresql.conf
-        regexp: "^#listen_addresses = 'localhost'"
-        line: "listen_addresses = '*'"
-        backup: yes
-      notify:
-        - Reiniciar PostgreSQL
-      when: ansible_os_family == "Debian" # Ajustar según tu SO y versión de PG
-
-  handlers:
-    - name: Reiniciar PostgreSQL
-      service:
-        name: postgresql
-        state: restarted
+    - name: Añadir el usuario al grupo sudoers (opcional y con precaución)
+      user:
+        name: "{{ new_username }}"
+        groups: sudo
+        append: yes
+      when: ansible_os_family == "Debian" or ansible_os_family == "RedHat"
 ```
 
 ```yaml
 ---
-# Nombre: ansible_deploy_app_files.yml
-# Playbook Ansible para desplegar archivos de aplicación en un servidor
+# Nombre: ansible_configure_logrotate.yml
+# Playbook Ansible para configurar logrotate para una aplicación específica
 
 - hosts: app_servers
   become: true
-
   vars:
-    app_dir: /opt/my_application
-    app_user: appuser
-    app_group: appuser
+    app_log_path: /var/log/myapp/*.log
+    logrotate_config_name: myapp
+    logrotate_entries:
+      - "{{ app_log_path }} {"
+      - "    daily"
+      - "    missingok"
+      - "    rotate 7"
+      - "    compress"
+      - "    delaycompress"
+      - "    notifempty"
+      - "    create 0640 appuser appgroup"
+      - "    postrotate"
+      - "        systemctl reload myapp.service > /dev/null || true"
+      - "    endscript"
+      - "}"
 
   tasks:
-    - name: Crear usuario de aplicación si no existe
-      user:
-        name: "{{ app_user }}"
-        state: present
-        shell: /bin/bash
-
-    - name: Crear directorio de la aplicación
+    - name: Crear directorio para los logs de la aplicación si no existe
       file:
-        path: "{{ app_dir }}"
+        path: "{{ item | dirname }}"
         state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
+        owner: appuser # Asegúrate de que este usuario exista, creado en un playbook anterior
+        group: appgroup # Asegúrate de que este grupo exista
         mode: '0755'
+      loop:
+        - "/var/log/myapp/access.log"
+        - "/var/log/myapp/error.log"
 
-    - name: Copiar archivos de la aplicación
+    - name: Copiar configuración de logrotate para la aplicación
       copy:
-        src: "files/myapp/"  # Ruta a la carpeta local de tu aplicación
-        dest: "{{ app_dir }}"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644' # O el modo que necesites, por ejemplo 0755 para scripts ejecutables
-
-    - name: Configurar permisos para scripts ejecutables (ejemplo)
-      file:
-        path: "{{ app_dir }}/run.sh"
-        mode: '0755'
-      when: "ansible_file_exists('{{ app_dir }}/run.sh')" # Solo si el archivo existe
-
-    - name: Iniciar o reiniciar servicio de la aplicación (si aplica)
-      # Esto es un ejemplo, el servicio real dependerá de tu aplicación
-      systemd:
-        name: myapp.service
-        state: restarted
-        enabled: yes
-      ignore_errors: yes # Ignorar errores si el servicio no existe o no se puede iniciar
+        content: "{{ logrotate_entries | join('\n') }}"
+        dest: "/etc/logrotate.d/{{ logrotate_config_name }}"
+        owner: root
+        group: root
+        mode: '0644'
 ```
