@@ -1,7 +1,7 @@
 ```yaml
 ---
-# Nombre: ansible_install_nginx.yml
-# Playbook Ansible para instalar y configurar NGINX en un servidor Ubuntu
+# Nombre: ansible_install_apache.yml
+# Playbook Ansible para instalar y configurar Apache en un servidor Ubuntu
 
 - hosts: web_servers
   become: true
@@ -11,22 +11,55 @@
       apt:
         update_cache: yes
 
-    - name: Instalar NGINX
+    - name: Instalar Apache
       apt:
-        name: nginx
+        name: apache2
         state: present
 
-    - name: Asegurar que NGINX esté iniciado y habilitado
+    - name: Asegurar que Apache esté iniciado y habilitado
       service:
-        name: nginx
+        name: apache2
         state: started
         enabled: yes
 ```
 
 ```yaml
 ---
-# Nombre: ansible_setup_firewall.yml
-# Playbook Ansible para configurar el firewall UFW en un servidor Ubuntu
+# Nombre: ansible_configure_mysql.yml
+# Playbook Ansible para instalar y configurar MySQL en un servidor Ubuntu
+
+- hosts: db_servers
+  become: true
+
+  tasks:
+    - name: Actualizar caché de apt
+      apt:
+        update_cache: yes
+
+    - name: Instalar MySQL
+      apt:
+        name: mysql-server
+        state: present
+
+    - name: Asegurar que MySQL esté iniciado y habilitado
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Configurar la contraseña raíz
+      mysql_user:
+        name: root
+        host: localhost
+        password: "your_secure_password"
+        priv: '*.*:ALL'
+        state: present
+```
+
+```yaml
+---
+# Nombre: ansible_setup_ufw.yml
+# Playbook Ansible para configurar UFW (Uncomplicated Firewall) en un servidor Ubuntu
 
 - hosts: web_servers
   become: true
@@ -51,29 +84,4 @@
       ufw:
         state: enabled
         enable_logging: yes
-```
-
-```yaml
----
-# Nombre: ansible_install_postgresql.yml
-# Playbook Ansible para instalar y configurar PostgreSQL en un servidor Ubuntu
-
-- hosts: db_servers
-  become: true
-
-  tasks:
-    - name: Actualizar caché de apt
-      apt:
-        update_cache: yes
-
-    - name: Instalar PostgreSQL
-      apt:
-        name: postgresql
-        state: present
-
-    - name: Asegurar que PostgreSQL esté iniciado y habilitado
-      service:
-        name: postgresql
-        state: started
-        enabled: yes
 ```
