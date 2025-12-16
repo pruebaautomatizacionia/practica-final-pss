@@ -1,186 +1,210 @@
-```yaml
 ---
-# Nombre: ansible_deploy_web_app.yml
-# Playbook Ansible para desplegar una aplicación web simple, descargarla y configurar Nginx
+# Nombre: ansible_install_nginx_and_configure.yml
+# Playbook Ansible para instalar Nginx y configurarlo para servir contenido estático
 
 - hosts: web_servers
   become: true # Ejecutar tareas con privilegios de root
 
   vars:
-    app_repo_url: "https://github.com/ejemplo/mi-aplicacion-web.git" # URL del repositorio de la app
-    app_dest_path: "/var/www/mi-aplicacion-web"
-    app_service_name: nginx
-    app_port: 80
+    nginx_conf_dir: "/etc/nginx/sites-available"
+    nginx_enabled_dir: "/etc/nginx/sites-enabled"
+    app_name: "my-static-site"
+    app_source_path: "/var/www/my-static-site" # Ruta donde se copiará el contenido estático
+    nginx_port: 80
 
   tasks:
-    - name: Actualizar caché de apt
+    - name: Actualizar caché de paquetes (Debian/Ubuntu)
       apt:
         update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Instalar Git y Nginx
+    - name: Instalar Nginx
       package:
-        name: "{{ item }}"
+        name: nginx
         state: present
-      loop:
-        - git
-        - nginx
-      when: ansible_os_family == "Debian"
 
-    - name: Clonar o actualizar el repositorio de la aplicación
-      git:
-        repo: "{{ app_repo_url }}"
-        dest: "{{ app_dest_path }}"
-        update: yes # Clona si no existe, o actualiza si ya existe
+    - name: Crear directorio para el contenido de la aplicación
+      file:
+        path: "{{ app_source_path }}"
+        state: directory
+        owner: www-data # Usuario bajo el que corre Nginx
+        group: www-data
+        mode: '0755'
 
-    - name: Configurar Nginx para servir la aplicación
+    - name: Copiar contenido estático a la webroot
+      copy:
+        src: ./static_content/ # Asume que tienes un directorio 'static_content' en tu repositorio
+        dest: "{{ app_source_path }}/"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Crear archivo de configuración de Nginx para la aplicación
       template:
-        src: templates/nginx_app.conf.j2 # Necesitarás crear este archivo template en un subdirectorio 'templates'
-        dest: "/etc/nginx/sites-available/mi-aplicacion-web"
+        src: templates/nginx_static.conf.j2 # Este template debe crearse en un directorio 'templates'
+        dest: "{{ nginx_conf_dir }}/{{ app_name }}"
       notify:
         - Recargar Nginx
 
     - name: Habilitar la configuración del sitio Nginx
       file:
-        src: "/etc/nginx/sites-available/mi-aplicacion-web"
-        dest: "/etc/nginx/sites-enabled/mi-aplicacion-web"
-        state: link
+        src: "{{ nginx_conf_dir }}/{{ app_name }}"
+        dest: "{{ nginx_enabled_dir }}/{{ app_name }}"
+        state: link # Crea un enlace simbólico
       notify:
         - Recargar Nginx
 
-    - name: Eliminar configuración por defecto de Nginx si existe (opcional)
+    - name: Eliminar la configuración por defecto de Nginx si existe
       file:
-        path: "/etc/nginx/sites-enabled/default"
+        path: "{{ nginx_enabled_dir }}/default"
         state: absent
       notify:
         - Recargar Nginx
 
     - name: Asegurar que Nginx esté iniciado y habilitado
       service:
-        name: "{{ app_service_name }}"
+        name: nginx
         state: started
         enabled: yes
 
   handlers:
     - name: Recargar Nginx
       service:
-        name: "{{ app_service_name }}"
+        name: nginx
         state: reloaded
-
 ---
-# Nombre: ansible_install_docker.yml
-# Playbook Ansible para instalar Docker Engine en sistemas basados en Debian y RedHat
+# Nombre: ansible_configure_firewall.yml
+# Playbook Ansible para configurar reglas de firewall (ufw en Debian/Ubuntu)
 
-- hosts: docker_hosts
+- hosts: all
   become: true
 
-  tasks:
-    - name: Agregar la clave GPG oficial de Docker
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
-      when: ansible_os_family == "Debian"
-      # Nota: En sistemas RedHat, el método puede ser diferente (ej. bajar y ejecutar un script).
-      # Este ejemplo se enfoca en Debian/Ubuntu para simplificar.
-
-    - name: Agregar el repositorio APT de Docker
-      apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "Debian"
-
-    - name: Instalar Docker CE, CLI, Containerd y plugins (Debian/Ubuntu)
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
-      when: ansible_os_family == "Debian"
-
-    - name: Asegurar que Docker esté iniciado y habilitado
-      service:
-        name: docker
-        state: started
-        enabled: yes
-```
-
-```yaml
----
-# Nombre: ansible_configure_database_user.yml
-# Playbook Ansible para crear un usuario de base de datos PostgreSQL y otorgarle permisos
-
-- hosts: db_servers
-  become: true # Si se necesita acceso a binarios de PostgreSQL como superusuario
-
   vars:
-    db_user: app_db_user
-    db_password: "secure_password_for_app_user" # ¡IMPORTANTE! Considera usar Ansible Vault para esto.
-    db_name: app_database
-    pg_listen_addresses: "*" # Permite conexiones desde cualquier IP (¡restringir en producción!)
+    allowed_ports:
+      - 22 # SSH
+      - 80 # HTTP
+      - 443 # HTTPS
+    ufw_rules_to_allow:
+      - { port: "22", proto: "tcp" }
+      - { port: "80", proto: "tcp" }
+      - { port: "443", proto: "tcp" }
+    # Ejemplo de regla para permitir un servicio específico
+    # - { rule: "allow", name: "docker" } 
 
   tasks:
-    - name: Instalar PostgreSQL (si no está instalado)
+    - name: Asegurar que ufw esté instalado (Debian/Ubuntu)
       package:
-        name: "postgresql"
+        name: ufw
         state: present
       when: ansible_os_family == "Debian"
 
-    # Nota: Para sistemas RedHat, el paquete y el servicio pueden ser 'postgresql-server' y 'postgresql'.
+    - name: Habilitar el firewall ufw
+      ufw:
+        state: enabled
+        policy: deny # Por defecto, denegar todo el tráfico entrante
+      when: ansible_os_family == "Debian"
 
-    - name: Asegurar que PostgreSQL esté iniciado y habilitado
-      service:
-        name: postgresql
-        state: started
-        enabled: yes
-
-    - name: Configurar PostgreSQL para aceptar conexiones externas (pg_hba.conf)
-      lineinfile:
-        path: /etc/postgresql/{{ ansible_pkg_mgr_version }}/main/pg_hba.conf # Ajusta la ruta según tu versión/SO
-        line: "host    {{ db_name }}    {{ db_user }}    0.0.0.0/0    md5"
-        state: present
-        backup: yes
+    - name: Permitir tráfico entrante según las reglas definidas
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+      loop: "{{ ufw_rules_to_allow }}"
+      when: ansible_os_family == "Debian"
       notify:
-        - Reiniciar PostgreSQL
+        - Recargar ufw
 
-    - name: Configurar PostgreSQL para escuchar en todas las interfaces (postgresql.conf)
-      lineinfile:
-        path: /etc/postgresql/{{ ansible_pkg_mgr_version }}/main/postgresql.conf # Ajusta la ruta
-        regexp: '^#?listen_addresses\s*='
-        line: "listen_addresses = '{{ pg_listen_addresses }}'"
-        state: present
-        backup: yes
-      notify:
-        - Reiniciar PostgreSQL
+    # Ejemplo de cómo añadir una regla por nombre de servicio (si está bien definido en /etc/ufw/applications.d/)
+    # - name: Permitir tráfico para el servicio 'myapp'
+    #   ufw:
+    #     rule: allow
+    #     name: "myapp"
+    #   when: ansible_os_family == "Debian"
+    #   notify:
+    #     - Recargar ufw
 
-    - name: Crear base de datos "{{ db_name }}" si no existe
-      postgresql_db:
-        name: "{{ db_name }}"
-        state: present
-        login_user: postgres # Asume que el usuario 'postgres' tiene acceso
-
-    - name: Crear usuario de base de datos "{{ db_user }}" si no existe
-      postgresql_user:
-        name: "{{ db_user }}"
-        password: "{{ db_password }}"
-        state: present
-        login_user: postgres
-        priv: ALL # Otorgar todos los privilegios al usuario
-
-    - name: Otorgar todos los privilegios en la base de datos "{{ db_name }}" al usuario "{{ db_user }}"
-      postgresql_user:
-        db_name: "{{ db_name }}"
-        name: "{{ db_user }}"
-        state: present
-        login_user: postgres
-        priv: ALL # Nuevamente, asegurar privilegios
+    - name: Permitir todo el tráfico saliente
+      ufw:
+        direction: outgoing
+        policy: allow
+      when: ansible_os_family == "Debian"
 
   handlers:
-    - name: Reiniciar PostgreSQL
-      service:
-        name: postgresql
+    - name: Recargar ufw
+      command: sudo ufw reload
+      when: ansible_os_family == "Debian"
+---
+# Nombre: ansible_install_monitoring_agent.yml
+# Playbook Ansible para instalar un agente de monitoreo (ejemplo: Prometheus Node Exporter)
+
+- hosts: monitoring_targets
+  become: true
+
+  vars:
+    node_exporter_version: "1.7.0" # Versión específica del Node Exporter
+    node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    node_exporter_user: prometheus
+    node_exporter_group: prometheus
+    node_exporter_install_dir: "/usr/local/bin"
+    node_exporter_data_dir: "/var/lib/prometheus"
+
+  tasks:
+    - name: Crear usuario y grupo para el agente (si no existen)
+      user:
+        name: "{{ node_exporter_user }}"
+        group: "{{ node_exporter_group }}"
+        create_home: yes
+        shell: /usr/sbin/nologin # El agente no necesita shell interactivo
+        state: present
+
+    - name: Crear directorio de datos para el agente
+      file:
+        path: "{{ node_exporter_data_dir }}"
+        state: directory
+        owner: "{{ node_exporter_user }}"
+        group: "{{ node_exporter_group }}"
+        mode: '0755'
+
+    - name: Descargar el binario del Node Exporter
+      get_url:
+        url: "{{ node_exporter_url }}"
+        dest: "/tmp/node_exporter.tar.gz"
+        mode: '0644'
+
+    - name: Extraer el binario del Node Exporter
+      unarchive:
+        src: "/tmp/node_exporter.tar.gz"
+        dest: "/tmp/"
+        remote_src: yes # Indica que la fuente es un archivo en el sistema remoto (runner)
+        creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter" # Evita re-extraer si ya existe
+
+    - name: Mover el binario del Node Exporter a la ruta de instalación
+      copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+        dest: "{{ node_exporter_install_dir }}/node_exporter"
+        owner: "{{ node_exporter_user }}"
+        group: "{{ node_exporter_group }}"
+        mode: '0755'
+        remote_src: yes # Indica que la fuente es un archivo en el sistema remoto
+
+    - name: Crear archivo de servicio systemd para Node Exporter
+      template:
+        src: templates/node_exporter.service.j2 # Este template debe crearse en un directorio 'templates'
+        dest: /etc/systemd/system/node_exporter.service
+      notify:
+        - Recargar systemd y reiniciar Node Exporter
+
+    - name: Asegurar que el servicio Node Exporter esté iniciado y habilitado
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes # Recarga la configuración de systemd
+
+  handlers:
+    - name: Recargar systemd y reiniciar Node Exporter
+      systemd:
+        name: node_exporter
         state: restarted
+        daemon_reload: yes
 ```
