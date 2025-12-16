@@ -1,6 +1,6 @@
 ---
-# Nombre: github_actions_ci_manual_terraform_only.yml
-name: Manual CI Workflow para Terraform (Solo Terraform)
+# Nombre: github_actions_ci_manual_full.yml
+name: Manual CI Workflow para Terraform y Ansible
 
 on:
   workflow_dispatch: # Permite la ejecución manual del workflow
@@ -21,13 +21,13 @@ on:
         type: string
 
 jobs:
-  terraform_workflow:
-    name: Terraform Execution (${{ github.event.inputs.terraform_action }})
+  # Job 1: Realiza validación, formateo y planificación de la infraestructura Terraform.
+  terraform_checks:
+    name: Terraform Validate & Plan
     runs-on: ubuntu-latest # Utiliza un runner de Ubuntu gestionado por GitHub Actions.
     defaults:
       run:
         # Define que todos los comandos ejecutados en este job se harán dentro del directorio 'terraform'.
-        # Esto es necesario porque 'main.tf' está ubicado en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/terraform.
         working-directory: terraform
 
     steps:
@@ -37,7 +37,6 @@ jobs:
       - name: Configurar Terraform
         uses: hashicorp/setup-terraform@v2 # Acción oficial para instalar y configurar Terraform CLI.
         with:
-          # Se recomienda especificar una versión de Terraform para asegurar consistencia y reproducibilidad.
           terraform_version: 1.x.x # Por ejemplo: "1.5.x" o "1.5.7".
 
       - name: Inicializar Terraform
@@ -49,13 +48,12 @@ jobs:
         run: terraform validate -no-color # Realiza una comprobación de sintaxis y coherencia.
 
       - name: Crear un plan de Terraform
-        # Este paso se ejecuta si la acción seleccionada es 'plan' o 'apply'.
         id: plan
         run: terraform plan -out=tfplan -no-color ${{ github.event.inputs.terraform_target != '' && format('-target=%s', github.event.inputs.terraform_target) || '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1 # Asegúrate de que esta región coincida con la definida en tu main.tf.
+          AWS_DEFAULT_REGION: us-east-1 # Ajustar a tu región.
         if: github.event.inputs.terraform_action == 'plan' || github.event.inputs.terraform_action == 'apply'
         continue-on-error: true # Permite continuar para mostrar el plan incluso si hay errores.
 
@@ -66,7 +64,6 @@ jobs:
         if: github.event.inputs.terraform_action == 'plan' || github.event.inputs.terraform_action == 'apply'
 
       - name: Aplicar Terraform
-        # Ejecuta terraform apply solo si la acción seleccionada es 'apply' y el plan fue exitoso.
         if: github.event.inputs.terraform_action == 'apply' && steps.plan.outcome == 'success'
         id: apply
         run: terraform apply -auto-approve tfplan
@@ -76,8 +73,6 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
 
       - name: Destruir Terraform
-        # Ejecuta terraform destroy solo si la acción seleccionada es 'destroy'.
-        # Se incluye un prompt de confirmación.
         if: github.event.inputs.terraform_action == 'destroy'
         id: destroy
         run: |
@@ -93,4 +88,77 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
+
+  # Job 2: Realiza verificaciones de sintaxis y estilo para los playbooks de Ansible.
+  ansible_checks:
+    name: Ansible Syntax Check & Lint
+    runs-on: ubuntu-latest # Ejecutar en un runner Ubuntu.
+    defaults:
+      run:
+        # Define que todos los comandos se ejecutarán dentro del directorio 'ansible'.
+        working-directory: ansible
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3 # Descarga el código del repositorio.
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x' # Instala la última versión de Python 3, requerida por Ansible.
+
+      - name: Instalar Ansible y dependencias
+        run: |
+          python -m pip install --upgrade pip # Actualiza pip para una instalación limpia.
+          pip install ansible ansible-lint # Instala Ansible y ansible-lint para la validación.
+
+      - name: Ejecutar Ansible Lint
+        run: ansible-lint main.yml || true # '|| true' permite continuar con advertencias.
+
+      - name: Chequear la sintaxis del playbook de Ansible
+        run: ansible-playbook --syntax-check main.yml
+
+  # Job 3: Aplica la configuración de Ansible si se cumplen las condiciones.
+  ansible_apply:
+    name: Apply Ansible Configuration
+    runs-on: ubuntu-latest
+    needs: [terraform_checks, ansible_checks] # Depende de que los checks de Terraform y Ansible se completen exitosamente.
+    # Ejecutar solo si la acción de Terraform es 'apply' y los checks anteriores fueron exitosos.
+    # Nota: El input 'terraform_action' no está directamente disponible en el 'if' de otro job,
+    # pero podemos inferir la intención de aplicar Ansible si la acción de Terraform fue 'apply'
+    # y no es un 'plan' o 'destroy' solo. Si se necesita una lógica más fina, se podría pasar un parámetro
+    # adicional o usar un paso para decidir la ejecución de este job.
+    if: |
+      github.event.inputs.terraform_action == 'apply' &&
+      needs.terraform_checks.result == 'success' &&
+      needs.ansible_checks.result == 'success'
+    defaults:
+      run:
+        working-directory: ansible # Ejecutar comandos en el directorio de Ansible.
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Instalar Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible
+
+      - name: Ejecutar Ansible Playbook
+        run: ansible-playbook main.yml
+        env:
+          # Configura las variables de entorno necesarias para la conexión a tus hosts.
+          # Por ejemplo, si Ansible necesita claves SSH para conectarse:
+          # ANSIBLE_PRIVATE_KEY_FILE: ${{ secrets.ANSIBLE_PRIVATE_KEY }}
+          # Si tus hosts se gestionan en un inventario dinámico, asegúrate de que Terraform esté configurado para generarlo.
+          # Si Ansible necesita credenciales de Cloud Provider:
+          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWS_DEFAULT_REGION: us-east-1
 ```
