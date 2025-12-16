@@ -21,12 +21,30 @@
         name: apache2
         state: started
         enabled: yes
+
+    - name: Copiar archivo de configuración por defecto de Apache
+      copy:
+        src: files/default_apache.conf
+        dest: /etc/apache2/sites-available/000-default.conf
+      notify:
+        - Reiniciar Apache
+
+    - name: Copiar página de índice HTML simple
+      copy:
+        content: "<h1>¡Hola desde Ansible y Apache!</h1>"
+        dest: /var/www/html/index.html
+
+  handlers:
+    - name: Reiniciar Apache
+      service:
+        name: apache2
+        state: restarted
 ```
 
 ```yaml
 ---
-# Nombre: ansible_configure_mysql.yml
-# Playbook Ansible para instalar y configurar MySQL en un servidor Ubuntu
+# Nombre: ansible_install_postgresql.yml
+# Playbook Ansible para instalar y configurar PostgreSQL en un servidor Ubuntu
 
 - hosts: db_servers
   become: true
@@ -36,52 +54,101 @@
       apt:
         update_cache: yes
 
-    - name: Instalar MySQL
+    - name: Instalar PostgreSQL
       apt:
-        name: mysql-server
+        name: postgresql
         state: present
 
-    - name: Asegurar que MySQL esté iniciado y habilitado
+    - name: Asegurar que PostgreSQL esté iniciado y habilitado
       service:
-        name: mysql
+        name: postgresql
         state: started
         enabled: yes
 
-    - name: Configurar la contraseña raíz
-      mysql_user:
-        name: root
-        host: localhost
-        password: "your_secure_password"
-        priv: '*.*:ALL'
+    - name: Crear usuario de base de datos
+      postgresql_user:
+        name: appuser
+        password: my_secure_password
         state: present
+
+    - name: Crear base de datos
+      postgresql_db:
+        name: myappdb
+        owner: appuser
+        state: present
+
+    - name: Permitir conexiones desde cualquier host (peligroso para producción, ajustar CIDR)
+      lineinfile:
+        path: /etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf
+        regexp: "^#host    all             all             127.0.0.1/32            md5"
+        line: "host    all             all             0.0.0.0/0               md5"
+        backup: yes
+      when: ansible_os_family == "Debian" # Ajustar según tu SO y versión de PG
+
+    - name: Configurar PostgreSQL para escuchar en todas las interfaces
+      lineinfile:
+        path: /etc/postgresql/{{ postgresql_version }}/main/postgresql.conf
+        regexp: "^#listen_addresses = 'localhost'"
+        line: "listen_addresses = '*'"
+        backup: yes
+      notify:
+        - Reiniciar PostgreSQL
+      when: ansible_os_family == "Debian" # Ajustar según tu SO y versión de PG
+
+  handlers:
+    - name: Reiniciar PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
 ```
 
 ```yaml
 ---
-# Nombre: ansible_setup_ufw.yml
-# Playbook Ansible para configurar UFW (Uncomplicated Firewall) en un servidor Ubuntu
+# Nombre: ansible_deploy_app_files.yml
+# Playbook Ansible para desplegar archivos de aplicación en un servidor
 
-- hosts: web_servers
+- hosts: app_servers
   become: true
 
+  vars:
+    app_dir: /opt/my_application
+    app_user: appuser
+    app_group: appuser
+
   tasks:
-    - name: Instalar UFW
-      apt:
-        name: ufw
+    - name: Crear usuario de aplicación si no existe
+      user:
+        name: "{{ app_user }}"
         state: present
+        shell: /bin/bash
 
-    - name: Permitir tráfico SSH
-      ufw:
-        rule: allow
-        name: OpenSSH
+    - name: Crear directorio de la aplicación
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
 
-    - name: Permitir tráfico HTTP
-      ufw:
-        rule: allow
-        name: '80'
+    - name: Copiar archivos de la aplicación
+      copy:
+        src: "files/myapp/"  # Ruta a la carpeta local de tu aplicación
+        dest: "{{ app_dir }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644' # O el modo que necesites, por ejemplo 0755 para scripts ejecutables
 
-    - name: Habilitar UFW
-      ufw:
-        state: enabled
-        enable_logging: yes
+    - name: Configurar permisos para scripts ejecutables (ejemplo)
+      file:
+        path: "{{ app_dir }}/run.sh"
+        mode: '0755'
+      when: "ansible_file_exists('{{ app_dir }}/run.sh')" # Solo si el archivo existe
+
+    - name: Iniciar o reiniciar servicio de la aplicación (si aplica)
+      # Esto es un ejemplo, el servicio real dependerá de tu aplicación
+      systemd:
+        name: myapp.service
+        state: restarted
+        enabled: yes
+      ignore_errors: yes # Ignorar errores si el servicio no existe o no se puede iniciar
 ```
