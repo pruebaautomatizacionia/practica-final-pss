@@ -25,7 +25,8 @@ jobs:
       - name: Configurar Terraform
         uses: hashicorp/setup-terraform@v2 # Configura Terraform CLI
         with:
-          terraform_version: 1.x.x # Se recomienda especificar una versión específica o un rango compatible, e.g., "1.5.x"
+          # Se recomienda especificar una versión específica o un rango compatible, e.g., "1.5.x"
+          terraform_version: 1.x.x 
 
       - name: Inicializar Terraform
         id: init
