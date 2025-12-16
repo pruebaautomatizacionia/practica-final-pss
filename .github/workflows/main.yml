@@ -1,20 +1,28 @@
 ---
-# Nombre: github_actions_ci_manual.yml
-name: Manual CI Workflow para Terraform y Ansible
+# Nombre: github_actions_ci_manual_terraform.yml
+name: Manual CI Workflow para Terraform
 
 on:
   workflow_dispatch: # Permite la ejecución manual del workflow
     inputs:
-      terraform_plan_only:
-        description: 'Ejecutar solo la planificación de Terraform (true/false)'
+      terraform_action:
+        description: 'Acción de Terraform a ejecutar'
         required: true
-        default: 'true'
-        type: boolean
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      terraform_target:
+        description: 'Opcional: Especifique un recurso objetivo para la acción de Terraform (ej. aws_instance.my_instance)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
-  # Job 1: Realiza validación y planificación de la infraestructura Terraform.
-  terraform_checks:
-    name: Terraform Validate & Plan
+  terraform_workflow:
+    name: Terraform Execution (${{ github.event.inputs.terraform_action }})
     runs-on: ubuntu-latest # Utiliza un runner de Ubuntu gestionado por GitHub Actions.
     defaults:
       run:
@@ -41,100 +49,48 @@ jobs:
         run: terraform validate -no-color # Realiza una comprobación de sintaxis y coherencia de la configuración Terraform.
 
       - name: Crear un plan de Terraform
+        # Este paso se ejecuta si la acción seleccionada es 'plan' o 'apply'.
         id: plan
-        # Para interactuar con AWS, el plan necesita credenciales.
-        # Estas deben configurarse como secretos en la configuración del repositorio de GitHub:
-        # Settings -> Secrets and variables -> Actions -> New repository secret.
-        # Nombres comunes: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY.
-        run: terraform plan -no-color
+        run: terraform plan -out=tfplan -no-color ${{ github.event.inputs.terraform_target != '' && format('-target=%s', github.event.inputs.terraform_target) || '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1 # Asegúrate de que esta región coincida con la definida en tu main.tf.
-        continue-on-error: true # Permite que el workflow continúe si el plan falla, para poder aplicar condicionalmente.
+        if: github.event.inputs.terraform_action == 'plan' || github.event.inputs.terraform_action == 'apply'
+        continue-on-error: true # Permite continuar para mostrar el plan incluso si hay errores.
 
       - name: Mostrar el resultado del plan de Terraform
         run: |
           echo "Plan de Terraform generado:"
           echo "${{ steps.plan.outputs.stdout }}"
+        if: github.event.inputs.terraform_action == 'plan' || github.event.inputs.terraform_action == 'apply'
 
-      - name: Aplicar Terraform (solo si no se ejecuta solo el plan)
-        if: "!needs.terraform_checks.outputs.terraform_plan_only && steps.plan.outcome == 'success'" # Ejecutar solo si el input es false y el plan fue exitoso
+      - name: Aplicar Terraform
+        # Ejecuta terraform apply solo si la acción seleccionada es 'apply' y el plan fue exitoso.
+        if: github.event.inputs.terraform_action == 'apply' && steps.plan.outcome == 'success'
         id: apply
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
 
-  # Job 2: Realiza verificaciones de sintaxis y estilo para los playbooks de Ansible.
-  ansible_checks:
-    name: Ansible Syntax Check & Lint
-    runs-on: ubuntu-latest # Ejecutar en un runner Ubuntu.
-    defaults:
-      run:
-        # Define que todos los comandos se ejecutarán dentro del directorio 'ansible'.
-        # Esto es necesario porque 'main.yml' está ubicado en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/ansible.
-        working-directory: ansible
-
-    steps:
-      - name: Checkout del código
-        uses: actions/checkout@v3 # Descarga el código del repositorio.
-
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x' # Instala la última versión de Python 3, requerida por Ansible.
-
-      - name: Instalar Ansible y dependencias
+      - name: Destruir Terraform
+        # Ejecuta terraform destroy solo si la acción seleccionada es 'destroy'.
+        # Se incluye un prompt de confirmación.
+        if: github.event.inputs.terraform_action == 'destroy'
+        id: destroy
         run: |
-          python -m pip install --upgrade pip # Actualiza pip para una instalación limpia.
-          pip install ansible ansible-lint # Instala Ansible y ansible-lint para la validación.
-
-      - name: Ejecutar Ansible Lint
-        # ansible-lint ayuda a identificar problemas de estilo, potenciales errores, y malas prácticas.
-        # '|| true' permite que el workflow continúe incluso si solo hay advertencias.
-        run: ansible-lint main.yml || true
-
-      - name: Chequear la sintaxis del playbook de Ansible
-        # Verifica que el archivo YAML del playbook sea sintácticamente correcto.
-        # No ejecuta tareas ni valida la lógica del playbook.
-        run: ansible-playbook --syntax-check main.yml
-
-  # Job 3: Aplica la configuración de Ansible si se cumplen las condiciones.
-  # Este job se ejecutará solo si el input 'terraform_plan_only' es 'false'.
-  ansible_apply:
-    name: Apply Ansible Configuration
-    runs-on: ubuntu-latest
-    needs: [terraform_checks, ansible_checks] # Depende de que los checks de Terraform y Ansible se completen exitosamente.
-    if: ${{ needs.terraform_checks.outputs.terraform_plan_only == 'false' && needs.terraform_checks.result == 'success' && needs.ansible_checks.result == 'success' }}
-    defaults:
-      run:
-        working-directory: ansible # Ejecutar comandos en el directorio de Ansible.
-
-    steps:
-      - name: Checkout del código
-        uses: actions/checkout@v3
-
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Instalar Ansible
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible
-
-      - name: Ejecutar Ansible Playbook
-        run: ansible-playbook main.yml
+          echo "Vas a destruir la infraestructura. Escribe 'yes' para continuar:"
+          read confirmation
+          if [ "$confirmation" = "yes" ]; then
+            terraform destroy -auto-approve ${{ github.event.inputs.terraform_target != '' && format('-target=%s', github.event.inputs.terraform_target) || '' }}
+          else
+            echo "Destrucción cancelada."
+            exit 1
+          fi
         env:
-          # Define cualquier variable de entorno necesaria para Ansible, como credenciales de acceso a la infraestructura
-          # que pueda necesitar Ansible para conectarse a los hosts (ej. claves SSH, credenciales de cloud provider).
-          # Ejemplo:
-          # ANSIBLE_PRIVATE_KEY_FILE: ${{ secrets.ANSIBLE_PRIVATE_KEY }}
-          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # Asegúrate de que las variables de entorno necesarias para la conexión a tus hosts
-          # (ej. inventario, claves SSH) estén configuradas adecuadamente en tu repositorio.
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
 ```
