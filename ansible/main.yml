@@ -1,32 +1,121 @@
 ```yaml
 ---
-# Nombre: ansible_install_nginx.yml
-# Playbook Ansible para instalar y configurar NGINX en un servidor Ubuntu
+# Nombre: ansible_install_docker.yml
+# Playbook Ansible para instalar Docker en un servidor Ubuntu
 
-- hosts: web_servers
+- hosts: docker_hosts
   become: true
-  vars:
-    nginx_port: 80
 
   tasks:
     - name: Actualizar caché de apt
       apt:
         update_cache: yes
 
-    - name: Instalar NGINX
+    - name: Instalar paquetes de pre-requisitos para Docker
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg-agent
+        - software-properties-common
+
+    - name: Añadir la clave GPG oficial de Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Añadir el repositorio de Docker APT
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        state: present
+
+    - name: Instalar Docker Engine
+      apt:
+        name: docker-ce
+        state: present
+
+    - name: Instalar Docker Compose (opcional)
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      vars:
+        docker_compose_version: "1.29.2" # Ajusta a la versión deseada
+
+    - name: Añadir usuario actual al grupo docker
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      when: ansible_user is defined and ansible_user != 'root'
+
+    - name: Asegurar que el servicio Docker esté iniciado y habilitado
+      service:
+        name: docker
+        state: started
+        enabled: yes
+```
+
+```yaml
+---
+# Nombre: ansible_deploy_static_website.yml
+# Playbook Ansible para desplegar un sitio web estático con NGINX
+
+- hosts: web_servers
+  become: true
+  vars:
+    web_root: /var/www/html/mysite
+    nginx_conf_template: nginx_site.conf.j2
+
+  tasks:
+    - name: Asegurar que NGINX esté instalado
       apt:
         name: nginx
         state: present
 
-    - name: Copiar archivo de configuración de NGINX personalizado
+    - name: Crear directorio raíz del sitio web
+      file:
+        path: "{{ web_root }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Copiar archivos del sitio web estático
       copy:
-        src: files/nginx.conf.j2  # Asegúrate de tener este archivo localmente
-        dest: /etc/nginx/sites-available/default
+        src: files/mysite/ # Asegúrate de tener una carpeta 'mysite' con tus archivos HTML/CSS/JS
+        dest: "{{ web_root }}"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Generar y copiar archivo de configuración de NGINX para el sitio
+      template:
+        src: "{{ nginx_conf_template }}"
+        dest: "/etc/nginx/sites-available/mysite.conf"
         owner: root
         group: root
         mode: '0644'
       notify:
-        - Recargar NGINX
+        - Reiniciar NGINX
+
+    - name: Habilitar el sitio de NGINX (crear symlink)
+      file:
+        src: "/etc/nginx/sites-available/mysite.conf"
+        dest: "/etc/nginx/sites-enabled/mysite.conf"
+        state: link
+      notify:
+        - Reiniciar NGINX
+
+    - name: Deshabilitar el sitio por defecto de NGINX (si existe)
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+      notify:
+        - Reiniciar NGINX
 
     - name: Asegurar que NGINX esté iniciado y habilitado
       service:
@@ -35,88 +124,93 @@
         enabled: yes
 
   handlers:
-    - name: Recargar NGINX
+    - name: Reiniciar NGINX
       service:
         name: nginx
-        state: reloaded
+        state: restarted
 ```
 
 ```yaml
 ---
-# Nombre: ansible_create_user_and_group.yml
-# Playbook Ansible para crear un usuario y un grupo en los servidores
+# Nombre: ansible_setup_monitoring_agent.yml
+# Playbook Ansible para instalar el agente Node Exporter de Prometheus
 
 - hosts: all
   become: true
   vars:
-    new_username: appuser
-    new_groupname: appgroup
-    user_password: "{{ lookup('ansible.builtin.env', 'APP_USER_PASSWORD') }}" # Usar una variable de entorno
+    node_exporter_version: "1.6.1" # Versión de Node Exporter
+    node_exporter_archive: "node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/{{ node_exporter_archive }}"
+    node_exporter_install_dir: /usr/local/bin
+    node_exporter_service_file: /etc/systemd/system/node_exporter.service
 
   tasks:
-    - name: Crear grupo de la aplicación si no existe
+    - name: Crear grupo de Node Exporter
       group:
-        name: "{{ new_groupname }}"
+        name: node_exporter
+        system: true
         state: present
 
-    - name: Crear usuario de la aplicación si no existe
+    - name: Crear usuario de Node Exporter
       user:
-        name: "{{ new_username }}"
-        group: "{{ new_groupname }}"
-        password: "{{ user_password | password_hash('sha512') }}" # Hashear la contraseña
-        shell: /bin/bash
+        name: node_exporter
+        group: node_exporter
+        system: true
+        shell: /sbin/nologin
+        create_home: false
         state: present
-        create_home: yes
 
-    - name: Añadir el usuario al grupo sudoers (opcional y con precaución)
-      user:
-        name: "{{ new_username }}"
-        groups: sudo
-        append: yes
-      when: ansible_os_family == "Debian" or ansible_os_family == "RedHat"
-```
+    - name: Descargar Node Exporter
+      unarchive:
+        src: "{{ node_exporter_url }}"
+        dest: /tmp
+        remote_src: yes
+        creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
 
-```yaml
----
-# Nombre: ansible_configure_logrotate.yml
-# Playbook Ansible para configurar logrotate para una aplicación específica
-
-- hosts: app_servers
-  become: true
-  vars:
-    app_log_path: /var/log/myapp/*.log
-    logrotate_config_name: myapp
-    logrotate_entries:
-      - "{{ app_log_path }} {"
-      - "    daily"
-      - "    missingok"
-      - "    rotate 7"
-      - "    compress"
-      - "    delaycompress"
-      - "    notifempty"
-      - "    create 0640 appuser appgroup"
-      - "    postrotate"
-      - "        systemctl reload myapp.service > /dev/null || true"
-      - "    endscript"
-      - "}"
-
-  tasks:
-    - name: Crear directorio para los logs de la aplicación si no existe
-      file:
-        path: "{{ item | dirname }}"
-        state: directory
-        owner: appuser # Asegúrate de que este usuario exista, creado en un playbook anterior
-        group: appgroup # Asegúrate de que este grupo exista
-        mode: '0755'
-      loop:
-        - "/var/log/myapp/access.log"
-        - "/var/log/myapp/error.log"
-
-    - name: Copiar configuración de logrotate para la aplicación
+    - name: Mover el binario de Node Exporter al directorio de instalación
       copy:
-        content: "{{ logrotate_entries | join('\n') }}"
-        dest: "/etc/logrotate.d/{{ logrotate_config_name }}"
-        owner: root
-        group: root
-        mode: '0644'
+        remote_src: yes
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+        dest: "{{ node_exporter_install_dir }}/node_exporter"
+        owner: node_exporter
+        group: node_exporter
+        mode: '0755'
+
+    - name: Crear archivo de servicio systemd para Node Exporter
+      copy:
+        dest: "{{ node_exporter_service_file }}"
+        content: |
+          [Unit]
+          Description=Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          Type=simple
+          ExecStart={{ node_exporter_install_dir }}/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Recargar systemd
+        - Reiniciar Node Exporter
+
+    - name: Asegurar que Node Exporter esté iniciado y habilitado
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  handlers:
+    - name: Recargar systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Reiniciar Node Exporter
+      systemd:
+        name: node_exporter
+        state: restarted
 ```
