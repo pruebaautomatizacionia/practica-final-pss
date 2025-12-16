@@ -26,7 +26,7 @@
 ```yaml
 ---
 # Nombre: ansible_setup_firewall.yml
-# Playbook Ansible para configurar UFW (Uncomplicated Firewall) en un servidor Ubuntu
+# Playbook Ansible para configurar el firewall UFW en un servidor Ubuntu
 
 - hosts: web_servers
   become: true
