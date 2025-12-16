@@ -1,127 +1,189 @@
 ---
-# Nombre: ansible_install_nginx_and_configure.yml
-# Playbook Ansible para instalar Nginx y configurarlo para servir contenido estático
+# Nombre: ansible_deploy_app_from_git.yml
+# Playbook Ansible para desplegar una aplicación web desde un repositorio Git
 
-- hosts: web_servers
+- hosts: webservers
   become: true # Ejecutar tareas con privilegios de root
 
   vars:
-    nginx_conf_dir: "/etc/nginx/sites-available"
-    nginx_enabled_dir: "/etc/nginx/sites-enabled"
-    app_name: "my-static-site"
-    app_source_path: "/var/www/my-static-site" # Ruta donde se copiará el contenido estático
-    nginx_port: 80
+    app_repo_url: "https://github.com/tu_usuario/tu_aplicacion.git" # Reemplaza con tu URL de repositorio
+    app_dest_path: "/var/www/mi_aplicacion"
+    app_branch: "main" # Rama a desplegar
+    app_service_name: nginx # O el nombre de tu servidor web/aplicación
+    app_port: 80
 
   tasks:
-    - name: Actualizar caché de paquetes (Debian/Ubuntu)
+    - name: Actualizar caché de apt (si aplica)
       apt:
         update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Instalar Nginx
+    - name: Instalar Git y el servidor web (ej. Nginx)
       package:
-        name: nginx
+        name: "{{ item }}"
         state: present
+      loop:
+        - git
+        - nginx # O 'apache2'
+      when: ansible_os_family == "Debian"
 
-    - name: Crear directorio para el contenido de la aplicación
-      file:
-        path: "{{ app_source_path }}"
-        state: directory
-        owner: www-data # Usuario bajo el que corre Nginx
-        group: www-data
-        mode: '0755'
+    - name: Clonar o actualizar el repositorio de la aplicación
+      git:
+        repo: "{{ app_repo_url }}"
+        dest: "{{ app_dest_path }}"
+        version: "{{ app_branch }}"
+        update: yes # Clona si no existe, o actualiza si ya existe
 
-    - name: Copiar contenido estático a la webroot
-      copy:
-        src: ./static_content/ # Asume que tienes un directorio 'static_content' en tu repositorio
-        dest: "{{ app_source_path }}/"
-        owner: www-data
-        group: www-data
-        mode: '0644'
-
-    - name: Crear archivo de configuración de Nginx para la aplicación
+    - name: Crear archivo de configuración del servidor web (ej. Nginx)
       template:
-        src: templates/nginx_static.conf.j2 # Este template debe crearse en un directorio 'templates'
-        dest: "{{ nginx_conf_dir }}/{{ app_name }}"
+        src: templates/nginx_app.conf.j2 # Debes crear este archivo en un directorio 'templates/'
+        dest: "/etc/nginx/sites-available/{{ app_name }}"
       notify:
-        - Recargar Nginx
+        - Recargar Servidor Web
 
-    - name: Habilitar la configuración del sitio Nginx
+    - name: Habilitar la configuración del sitio web
       file:
-        src: "{{ nginx_conf_dir }}/{{ app_name }}"
-        dest: "{{ nginx_enabled_dir }}/{{ app_name }}"
-        state: link # Crea un enlace simbólico
+        src: "/etc/nginx/sites-available/{{ app_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ app_name }}"
+        state: link
       notify:
-        - Recargar Nginx
+        - Recargar Servidor Web
 
-    - name: Eliminar la configuración por defecto de Nginx si existe
-      file:
-        path: "{{ nginx_enabled_dir }}/default"
-        state: absent
-      notify:
-        - Recargar Nginx
-
-    - name: Asegurar que Nginx esté iniciado y habilitado
+    - name: Asegurar que el servicio esté iniciado y habilitado
       service:
-        name: nginx
+        name: "{{ app_service_name }}"
         state: started
         enabled: yes
 
   handlers:
-    - name: Recargar Nginx
+    - name: Recargar Servidor Web
       service:
-        name: nginx
+        name: "{{ app_service_name }}"
         state: reloaded
 ---
-# Nombre: ansible_configure_firewall.yml
-# Playbook Ansible para configurar reglas de firewall (ufw en Debian/Ubuntu)
+# Nombre: ansible_install_docker_and_compose.yml
+# Playbook Ansible para instalar Docker Engine y Docker Compose
+
+- hosts: docker_hosts
+  become: true
+
+  tasks:
+    - name: Eliminar paquetes de Docker viejos (si existen)
+      package:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - docker
+        - docker-engine
+        - docker.io
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+        - docker-buildx-plugin
+        - docker-compose-plugin
+      when: ansible_os_family == "Debian"
+
+    - name: Actualizar caché de apt (Debian/Ubuntu)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Instalar paquetes necesarios para Docker (Debian/Ubuntu)
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - ca-certificates
+        - curl
+        - gnupg
+        - lsb-release
+      when: ansible_os_family == "Debian"
+
+    - name: Agregar la clave GPG oficial de Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Agregar el repositorio APT de Docker
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Instalar Docker Engine, CLI, Containerd y plugins
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Asegurar que Docker esté iniciado y habilitado
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Añadir el usuario actual al grupo 'docker' para ejecutar sin sudo (opcional)
+      user:
+        name: "{{ ansible_user }}" # Usuario que ejecuta Ansible
+        groups: docker
+        append: yes
+      when: ansible_os_family == "Debian"
+---
+# Nombre: ansible_configure_firewall_ufw.yml
+# Playbook Ansible para configurar el firewall UFW (Uncomplicated Firewall)
 
 - hosts: all
   become: true
 
   vars:
+    # Lista de puertos y protocolos permitidos
     allowed_ports:
-      - 22 # SSH
-      - 80 # HTTP
-      - 443 # HTTPS
-    ufw_rules_to_allow:
-      - { port: "22", proto: "tcp" }
-      - { port: "80", proto: "tcp" }
-      - { port: "443", proto: "tcp" }
-    # Ejemplo de regla para permitir un servicio específico
-    # - { rule: "allow", name: "docker" } 
+      - { port: "22", proto: "tcp" }  # SSH
+      - { port: "80", proto: "tcp" }  # HTTP
+      - { port: "443", proto: "tcp" } # HTTPS
+    # Puedes añadir más reglas aquí, por ejemplo, para permitir conexiones a Docker
+    # - { rule: "allow", name: "docker" }
 
   tasks:
-    - name: Asegurar que ufw esté instalado (Debian/Ubuntu)
+    - name: Asegurar que UFW esté instalado
       package:
         name: ufw
         state: present
       when: ansible_os_family == "Debian"
 
-    - name: Habilitar el firewall ufw
+    - name: Establecer política por defecto (denegar entrada, permitir salida)
       ufw:
         state: enabled
-        policy: deny # Por defecto, denegar todo el tráfico entrante
+        policy: deny
+        direction: incoming
       when: ansible_os_family == "Debian"
 
-    - name: Permitir tráfico entrante según las reglas definidas
+    - name: Permitir tráfico en los puertos especificados
       ufw:
         rule: allow
         port: "{{ item.port }}"
         proto: "{{ item.proto }}"
-      loop: "{{ ufw_rules_to_allow }}"
+      loop: "{{ allowed_ports }}"
       when: ansible_os_family == "Debian"
       notify:
-        - Recargar ufw
+        - Recargar UFW
 
-    # Ejemplo de cómo añadir una regla por nombre de servicio (si está bien definido en /etc/ufw/applications.d/)
-    # - name: Permitir tráfico para el servicio 'myapp'
+    # Ejemplo de cómo permitir un servicio específico (si está definido en /etc/ufw/applications.d/)
+    # - name: Permitir tráfico para el servicio 'Nginx Full'
     #   ufw:
     #     rule: allow
-    #     name: "myapp"
+    #     name: "Nginx Full"
     #   when: ansible_os_family == "Debian"
     #   notify:
-    #     - Recargar ufw
+    #     - Recargar UFW
 
     - name: Permitir todo el tráfico saliente
       ufw:
@@ -130,81 +192,6 @@
       when: ansible_os_family == "Debian"
 
   handlers:
-    - name: Recargar ufw
+    - name: Recargar UFW
       command: sudo ufw reload
       when: ansible_os_family == "Debian"
----
-# Nombre: ansible_install_monitoring_agent.yml
-# Playbook Ansible para instalar un agente de monitoreo (ejemplo: Prometheus Node Exporter)
-
-- hosts: monitoring_targets
-  become: true
-
-  vars:
-    node_exporter_version: "1.7.0" # Versión específica del Node Exporter
-    node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
-    node_exporter_user: prometheus
-    node_exporter_group: prometheus
-    node_exporter_install_dir: "/usr/local/bin"
-    node_exporter_data_dir: "/var/lib/prometheus"
-
-  tasks:
-    - name: Crear usuario y grupo para el agente (si no existen)
-      user:
-        name: "{{ node_exporter_user }}"
-        group: "{{ node_exporter_group }}"
-        create_home: yes
-        shell: /usr/sbin/nologin # El agente no necesita shell interactivo
-        state: present
-
-    - name: Crear directorio de datos para el agente
-      file:
-        path: "{{ node_exporter_data_dir }}"
-        state: directory
-        owner: "{{ node_exporter_user }}"
-        group: "{{ node_exporter_group }}"
-        mode: '0755'
-
-    - name: Descargar el binario del Node Exporter
-      get_url:
-        url: "{{ node_exporter_url }}"
-        dest: "/tmp/node_exporter.tar.gz"
-        mode: '0644'
-
-    - name: Extraer el binario del Node Exporter
-      unarchive:
-        src: "/tmp/node_exporter.tar.gz"
-        dest: "/tmp/"
-        remote_src: yes # Indica que la fuente es un archivo en el sistema remoto (runner)
-        creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter" # Evita re-extraer si ya existe
-
-    - name: Mover el binario del Node Exporter a la ruta de instalación
-      copy:
-        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
-        dest: "{{ node_exporter_install_dir }}/node_exporter"
-        owner: "{{ node_exporter_user }}"
-        group: "{{ node_exporter_group }}"
-        mode: '0755'
-        remote_src: yes # Indica que la fuente es un archivo en el sistema remoto
-
-    - name: Crear archivo de servicio systemd para Node Exporter
-      template:
-        src: templates/node_exporter.service.j2 # Este template debe crearse en un directorio 'templates'
-        dest: /etc/systemd/system/node_exporter.service
-      notify:
-        - Recargar systemd y reiniciar Node Exporter
-
-    - name: Asegurar que el servicio Node Exporter esté iniciado y habilitado
-      systemd:
-        name: node_exporter
-        state: started
-        enabled: yes
-        daemon_reload: yes # Recarga la configuración de systemd
-
-  handlers:
-    - name: Recargar systemd y reiniciar Node Exporter
-      systemd:
-        name: node_exporter
-        state: restarted
-        daemon_reload: yes
-```
