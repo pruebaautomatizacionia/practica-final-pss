@@ -1,199 +1,144 @@
 ---
-# Nombre: ansible_deploy_app_from_git.yml
-# Playbook Ansible para desplegar una aplicación web desde un repositorio Git
+# Nombre: ansible_configure_webserver.yml
+# Playbook Ansible para configurar un servidor web (Nginx)
 
-- hosts: webservers
-  become: true # Ejecutar tareas con privilegios de root
+- hosts: webservers # Este es un grupo de hosts que deberías definir en tu inventario Ansible
+  become: true # Permite ejecutar tareas con privilegios de root
 
   vars:
-    app_repo_url: "https://github.com/tu_usuario/tu_aplicacion.git" # Reemplaza con tu URL de repositorio
-    app_dest_path: "/var/www/mi_aplicacion"
-    app_branch: "main" # Rama a desplegar
-    app_service_name: nginx # O el nombre de tu servidor web/aplicación
-    app_port: 80
+    webserver_package: nginx
+    config_dir: /etc/nginx/sites-available
+    enabled_dir: /etc/nginx/sites-enabled
+    app_name: my_app_site # Nombre del sitio a configurar (ej. my_app_site)
 
   tasks:
-    - name: Actualizar caché de apt (si aplica)
-      apt:
-        update_cache: yes
-      when: ansible_os_family == "Debian"
-
-    - name: Instalar Git y el servidor web (ej. Nginx)
+    - name: Asegurar que el paquete del servidor web está instalado
       package:
-        name: "{{ item }}"
+        name: "{{ webserver_package }}"
         state: present
-      loop:
-        - git
-        - nginx # O 'apache2'
-      when: ansible_os_family == "Debian"
+      when: ansible_os_family == "Debian" # Ejemplo para sistemas basados en Debian/Ubuntu
 
-    - name: Clonar o actualizar el repositorio de la aplicación
-      git:
-        repo: "{{ app_repo_url }}"
-        dest: "{{ app_dest_path }}"
-        version: "{{ app_branch }}"
-        update: yes # Clona si no existe, o actualiza si ya existe
-
-    - name: Crear archivo de configuración del servidor web (ej. Nginx)
-      template:
-        src: templates/nginx_app.conf.j2 # Debes crear este archivo en un directorio 'templates/'
-        dest: "/etc/nginx/sites-available/{{ app_name }}"
+    - name: Copiar archivo de configuración del sitio web
+      copy:
+        src: files/nginx/{{ app_name }}.conf # Asegúrate de tener un archivo llamado 'my_app_site.conf' en 'files/nginx/'
+        dest: "{{ config_dir }}/{{ app_name }}"
+        owner: root
+        group: root
+        mode: '0644'
       notify:
-        - Recargar Servidor Web
+        - Recargar Nginx
 
-    - name: Habilitar la configuración del sitio web
+    - name: Habilitar el sitio web (crear enlace simbólico)
       file:
-        src: "/etc/nginx/sites-available/{{ app_name }}"
-        dest: "/etc/nginx/sites-enabled/{{ app_name }}"
+        src: "{{ config_dir }}/{{ app_name }}"
+        dest: "{{ enabled_dir }}/{{ app_name }}"
         state: link
+        force: yes # Sobreescribe si ya existe un enlace
       notify:
-        - Recargar Servidor Web
+        - Recargar Nginx
 
-    - name: Asegurar que el servicio esté iniciado y habilitado
+    - name: Asegurar que el servicio Nginx esté iniciado y habilitado
       service:
-        name: "{{ app_service_name }}"
+        name: "{{ webserver_package }}"
         state: started
         enabled: yes
 
   handlers:
-    - name: Recargar Servidor Web
+    - name: Recargar Nginx
       service:
-        name: "{{ app_service_name }}"
+        name: "{{ webserver_package }}"
         state: reloaded
 ---
-# Nombre: terraform_aws_s3_bucket.tf
-# Ejemplo 1: Creación de un bucket S3 básico en AWS
+# Nombre: terraform_aws_ec2_instance.tf
+# Ejemplo 1: Creación de una instancia EC2 de Amazon Web Services con acceso SSH
 
 provider "aws" {
   region = "us-east-1" # Reemplaza con tu región preferida
 }
 
-resource "aws_s3_bucket" "example_bucket" {
-  bucket = "mi-ejemplo-bucket-terraform-${random_id.bucket_suffix.hex}" # Nombre único para el bucket S3
+# Datos para obtener la AMI más reciente de Amazon Linux 2
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# Se asume que ya existe una VPC, subred y un grupo de seguridad.
+# Aquí se usa un grupo de seguridad existente para simplificar.
+data "aws_security_group" "existing_sg" {
+  id = "sg-0abcdef1234567890" # ¡REEMPLAZA con el ID de tu grupo de seguridad existente!
+}
+
+resource "aws_instance" "web_server" {
+  ami                    = data.aws_ami.amazon_linux_2.id
+  instance_type          = "t2.micro"
+  # Subred_id es necesaria si usas una VPC específica. Si no, puede omitirse para usar la VPC por defecto.
+  # subnet_id            = "subnet-0123456789abcdef0" # ¡REEMPLAZA con tu ID de subred si es necesario!
+  vpc_security_group_ids = [data.aws_security_group.existing_sg.id]
+  key_name               = "my-ssh-key" # ¡REEMPLAZA con el nombre de tu par de claves SSH en AWS!
 
   tags = {
-    Name        = "MyExampleBucket"
+    Name        = "WebServerInstance"
     Environment = "Development"
   }
 }
 
-# Genera un sufijo aleatorio para asegurar la unicidad del nombre del bucket
-resource "random_id" "bucket_suffix" {
-  byte_length = 8
+output "ec2_instance_public_ip" {
+  description = "La dirección IP pública de la instancia EC2."
+  value       = aws_instance.web_server.public_ip
 }
 
-resource "aws_s3_bucket_acl" "example_bucket_acl" {
-  bucket = aws_s3_bucket.example_bucket.id
-  acl    = "private" # Asegura que el bucket sea privado por defecto
+output "ec2_instance_private_ip" {
+  description = "La dirección IP privada de la instancia EC2."
+  value       = aws_instance.web_server.private_ip
 }
 
-output "s3_bucket_name" {
-  description = "El nombre del bucket S3 creado."
-  value       = aws_s3_bucket.example_bucket.bucket
-}
-
-output "s3_bucket_domain_name" {
-  description = "El nombre de dominio del bucket S3."
-  value       = aws_s3_bucket.example_bucket.bucket_domain_name
-}
-
-# Nombre: terraform_azure_vm_with_ssh_key.tf
-# Ejemplo 2: Creación de una máquina virtual Linux en Azure con acceso SSH a través de clave pública
+# Nombre: terraform_azure_storage_account.tf
+# Ejemplo 2: Creación de una cuenta de almacenamiento en Azure
 
 provider "azurerm" {
   features {}
 }
 
-resource "azurerm_resource_group" "vm_rg" {
-  name     = "rg-terraform-vm-ssh"
+resource "azurerm_resource_group" "storage_rg" {
+  name     = "rg-storage-tf-example"
   location = "East US" # Reemplaza con tu región preferida
 }
 
-resource "azurerm_virtual_network" "vm_vnet" {
-  name                = "vnet-tf-vm-ssh"
-  address_space       = ["10.0.0.0/16"]
-  location            = azurerm_resource_group.vm_rg.location
-  resource_group_name = azurerm_resource_group.vm_rg.name
-}
+resource "azurerm_storage_account" "sa" {
+  name                     = "stexampletf${random_string.suffix.result}" # Nombre único globalmente
+  resource_group_name      = azurerm_resource_group.storage_rg.name
+  location                 = azurerm_resource_group.storage_rg.location
+  account_tier             = "Standard_LRS"
+  account_replication_type = "LRS" # Locally-redundant storage
 
-resource "azurerm_subnet" "vm_subnet" {
-  name                 = "subnet-tf-vm-ssh"
-  resource_group_name  = azurerm_resource_group.vm_rg.name
-  virtual_network_name = azurerm_virtual_network.vm_vnet.name
-  address_prefix       = "10.0.1.0/24"
-}
-
-resource "azurerm_public_ip" "vm_public_ip" {
-  name                = "pip-tf-vm-ssh"
-  location            = azurerm_resource_group.vm_rg.location
-  resource_group_name = azurerm_resource_group.vm_rg.name
-  allocation_method   = "Static" # Asignación estática de IP pública
-}
-
-resource "azurerm_network_security_group" "vm_nsg" {
-  name                = "nsg-tf-vm-ssh"
-  location            = azurerm_resource_group.vm_rg.location
-  resource_group_name = azurerm_resource_group.vm_rg.name
-
-  security_rule {
-    name                       = "AllowSSH"
-    priority                   = 1001
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = "*" # ¡RESTRINGIR a IPs específicas en entornos de producción!
-    destination_address_prefix = "*"
+  tags = {
+    environment = "TerraformExample"
   }
 }
 
-resource "azurerm_network_interface" "vm_nic" {
-  name                = "nic-tf-vm-ssh"
-  location            = azurerm_resource_group.vm_rg.location
-  resource_group_name = azurerm_resource_group.vm_rg.name
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.vm_subnet.id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.vm_public_ip.id
-  }
+resource "random_string" "suffix" {
+  length  = 6
+  special = false
+  upper   = false
 }
 
-resource "azurerm_network_interface_security_group_association" "vm_nsg_assoc" {
-  network_interface_id      = azurerm_network_interface.vm_nic.id
-  network_security_group_id = azurerm_network_security_group.vm_nsg.id
+output "storage_account_name" {
+  description = "El nombre de la cuenta de almacenamiento de Azure."
+  value       = azurerm_storage_account.sa.name
 }
 
-resource "azurerm_linux_virtual_machine" "vm_instance" {
-  name                            = "vm-tf-ssh-example"
-  location                        = azurerm_resource_group.vm_rg.location
-  resource_group_name             = azurerm_resource_group.vm_rg.name
-  network_interface_ids           = [azurerm_network_interface.vm_nic.id]
-  size                            = "Standard_B1s" # Tamaño de la VM
-  admin_username                  = "azureuser"
-  disable_password_authentication = true
-
-  admin_ssh_key {
-    username   = "azureuser"
-    public_key = file("~/.ssh/id_rsa.pub") # Asegúrate de tener este archivo de clave pública SSH.
-  }
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
-    version   = "latest"
-  }
-}
-
-output "vm_public_ip_address" {
-  description = "La dirección IP pública de la máquina virtual Azure."
-  value       = azurerm_public_ip.vm_public_ip.ip_address
+output "storage_account_primary_access_key" {
+  description = "La clave de acceso primaria de la cuenta de almacenamiento de Azure."
+  value       = azurerm_storage_account.sa.primary_access_key
+  sensitive   = true # Marca como sensible ya que es una clave de acceso
 }
