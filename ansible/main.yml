@@ -1,216 +1,217 @@
 ```yaml
 ---
-# Nombre: ansible_install_docker.yml
-# Playbook Ansible para instalar Docker en un servidor Ubuntu
+# Nombre: ansible_install_and_configure_nginx.yml
+# Playbook Ansible para instalar NGINX y desplegar una página de bienvenida simple en Ubuntu/Debian
 
-- hosts: docker_hosts
-  become: true
+- hosts: web_servers
+  become: true # Ejecutar tareas con privilegios de root
 
   tasks:
     - name: Actualizar caché de apt
       apt:
         update_cache: yes
 
-    - name: Instalar paquetes de pre-requisitos para Docker
-      apt:
-        name: "{{ item }}"
-        state: present
-      loop:
-        - apt-transport-https
-        - ca-certificates
-        - curl
-        - gnupg-agent
-        - software-properties-common
-
-    - name: Añadir la clave GPG oficial de Docker
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
-
-    - name: Añadir el repositorio de Docker APT
-      apt_repository:
-        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
-        state: present
-
-    - name: Instalar Docker Engine
-      apt:
-        name: docker-ce
-        state: present
-
-    - name: Instalar Docker Compose (opcional)
-      get_url:
-        url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64"
-        dest: /usr/local/bin/docker-compose
-        mode: '0755'
-      vars:
-        docker_compose_version: "1.29.2" # Ajusta a la versión deseada
-
-    - name: Añadir usuario actual al grupo docker
-      user:
-        name: "{{ ansible_user }}"
-        groups: docker
-        append: yes
-      when: ansible_user is defined and ansible_user != 'root'
-
-    - name: Asegurar que el servicio Docker esté iniciado y habilitado
-      service:
-        name: docker
-        state: started
-        enabled: yes
-```
-
-```yaml
----
-# Nombre: ansible_deploy_static_website.yml
-# Playbook Ansible para desplegar un sitio web estático con NGINX
-
-- hosts: web_servers
-  become: true
-  vars:
-    web_root: /var/www/html/mysite
-    nginx_conf_template: nginx_site.conf.j2
-
-  tasks:
-    - name: Asegurar que NGINX esté instalado
+    - name: Instalar NGINX
       apt:
         name: nginx
         state: present
 
-    - name: Crear directorio raíz del sitio web
-      file:
-        path: "{{ web_root }}"
-        state: directory
-        owner: www-data
-        group: www-data
-        mode: '0755'
+    - name: Asegurar que NGINX esté iniciado y habilitado en el arranque
+      service:
+        name: nginx
+        state: started
+        enabled: yes
 
-    - name: Copiar archivos del sitio web estático
+    - name: Copiar página de índice HTML básica
       copy:
-        src: files/mysite/ # Asegúrate de tener una carpeta 'mysite' con tus archivos HTML/CSS/JS
-        dest: "{{ web_root }}"
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>¡Bienvenido!</title>
+              <style>
+                  body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+                  h1 { color: #333; }
+                  p { color: #666; }
+              </style>
+          </head>
+          <body>
+              <h1>¡Hola desde Ansible y NGINX!</h1>
+              <p>Esta es una página web de ejemplo desplegada automáticamente.</p>
+          </body>
+          </html>
+        dest: /var/www/html/index.nginx-debian.html
         owner: www-data
         group: www-data
         mode: '0644'
 
-    - name: Generar y copiar archivo de configuración de NGINX para el sitio
+    - name: Configurar NGINX para usar la página de índice correcta (si se modificó el default)
+      # Este paso asume que el archivo de configuración por defecto de NGINX ya apunta a index.nginx-debian.html
+      # Si se necesita un vhost personalizado, se usaría 'template' o 'copy' para un archivo .conf.
+      lineinfile:
+        path: /etc/nginx/sites-available/default
+        regexp: '^\s*index'
+        line: '        index index.nginx-debian.html index.html index.htm;'
+      notify:
+        - Recargar NGINX
+
+  handlers:
+    - name: Recargar NGINX
+      service:
+        name: nginx
+        state: reloaded
+
+---
+# Nombre: ansible_setup_firewall_ufw.yml
+# Playbook Ansible para configurar el firewall UFW en servidores Ubuntu
+
+- hosts: all
+  become: true # Ejecutar tareas con privilegios de root
+  vars:
+    # Puertos que queremos abrir
+    open_ports:
+      - 22/tcp  # SSH
+      - 80/tcp  # HTTP
+      - 443/tcp # HTTPS (si es necesario)
+
+  tasks:
+    - name: Instalar UFW si no está presente
+      apt:
+        name: ufw
+        state: present
+
+    - name: Denegar todas las conexiones entrantes por defecto
+      ufw:
+        direction: incoming
+        policy: deny
+
+    - name: Permitir todas las conexiones salientes por defecto
+      ufw:
+        direction: outgoing
+        policy: allow
+
+    - name: Permitir puertos específicos
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ open_ports }}"
+
+    - name: Habilitar UFW
+      ufw:
+        state: enabled
+        # El 'force: yes' es crucial para no necesitar interacción manual,
+        # pero úsalo con precaución, podría bloquearte el acceso SSH si no está permitido.
+        # Asegúrate de que el puerto SSH (22) está en open_ports.
+        force: yes
+
+    - name: Verificar el estado de UFW (opcional)
+      command: ufw status verbose
+      register: ufw_status
+      changed_when: false # Este comando no cambia el estado del sistema
+
+    - name: Mostrar estado de UFW
+      debug:
+        msg: "{{ ufw_status.stdout_lines }}"
+
+---
+# Nombre: ansible_deploy_java_application.yml
+# Playbook Ansible para desplegar una aplicación Java (WAR) en Apache Tomcat
+
+- hosts: app_servers
+  become: true # Ejecutar tareas con privilegios de root
+  vars:
+    java_version: 11
+    tomcat_version: 9
+    tomcat_base_dir: /opt/tomcat
+    app_name: mywebapp
+    app_war_file: mywebapp.war # Nombre del archivo WAR
+    # Asegúrate de que 'files/mywebapp.war' exista en tu directorio de playbooks
+    source_war_path: files/{{ app_war_file }}
+    target_webapps_dir: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}/webapps"
+
+  tasks:
+    - name: Actualizar caché de apt
+      apt:
+        update_cache: yes
+
+    - name: Instalar OpenJDK (Java Development Kit)
+      apt:
+        name: "openjdk-{{ java_version }}-jdk"
+        state: present
+
+    - name: Descargar y extraer Apache Tomcat
+      unarchive:
+        src: "https://archive.apache.org/dist/tomcat/tomcat-{{ tomcat_version }}/v{{ tomcat_version }}.0.{{ tomcat_version }}0/bin/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0.tar.gz"
+        dest: "{{ tomcat_base_dir }}"
+        remote_src: yes
+        creates: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0"
+        owner: root
+        group: root
+        mode: '0755'
+      vars:
+        # Aquí estoy usando una versión específica, podrías parametrizarla más si lo deseas
+        tomcat_major_version: "{{ tomcat_version }}.0"
+        tomcat_minor_version: "{{ tomcat_version }}0" # por ejemplo 9.0.76
+
+    - name: Crear enlace simbólico para la instalación de Tomcat
+      file:
+        src: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0"
+        dest: "{{ tomcat_base_dir }}/latest"
+        state: link
+        force: yes
+
+    - name: Crear usuario y grupo para Tomcat
+      user:
+        name: tomcat
+        group: tomcat
+        system: true
+        shell: /bin/false
+        create_home: false
+        state: present
+
+    - name: Cambiar propiedad de los archivos de Tomcat
+      file:
+        path: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0"
+        owner: tomcat
+        group: tomcat
+        recurse: yes
+
+    - name: Configurar Tomcat como servicio systemd
       template:
-        src: "{{ nginx_conf_template }}"
-        dest: "/etc/nginx/sites-available/mysite.conf"
+        src: templates/tomcat.service.j2 # Necesitarás crear este archivo template
+        dest: /etc/systemd/system/tomcat.service
         owner: root
         group: root
         mode: '0644'
       notify:
-        - Reiniciar NGINX
-
-    - name: Habilitar el sitio de NGINX (crear symlink)
-      file:
-        src: "/etc/nginx/sites-available/mysite.conf"
-        dest: "/etc/nginx/sites-enabled/mysite.conf"
-        state: link
-      notify:
-        - Reiniciar NGINX
-
-    - name: Deshabilitar el sitio por defecto de NGINX (si existe)
-      file:
-        path: "/etc/nginx/sites-enabled/default"
-        state: absent
-      notify:
-        - Reiniciar NGINX
-
-    - name: Asegurar que NGINX esté iniciado y habilitado
-      service:
-        name: nginx
-        state: started
-        enabled: yes
-
-  handlers:
-    - name: Reiniciar NGINX
-      service:
-        name: nginx
-        state: restarted
-```
-
-```yaml
----
-# Nombre: ansible_setup_monitoring_agent.yml
-# Playbook Ansible para instalar el agente Node Exporter de Prometheus
-
-- hosts: all
-  become: true
-  vars:
-    node_exporter_version: "1.6.1" # Versión de Node Exporter
-    node_exporter_archive: "node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
-    node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/{{ node_exporter_archive }}"
-    node_exporter_install_dir: /usr/local/bin
-    node_exporter_service_file: /etc/systemd/system/node_exporter.service
-
-  tasks:
-    - name: Crear grupo de Node Exporter
-      group:
-        name: node_exporter
-        system: true
-        state: present
-
-    - name: Crear usuario de Node Exporter
-      user:
-        name: node_exporter
-        group: node_exporter
-        system: true
-        shell: /sbin/nologin
-        create_home: false
-        state: present
-
-    - name: Descargar Node Exporter
-      unarchive:
-        src: "{{ node_exporter_url }}"
-        dest: /tmp
-        remote_src: yes
-        creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
-
-    - name: Mover el binario de Node Exporter al directorio de instalación
-      copy:
-        remote_src: yes
-        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
-        dest: "{{ node_exporter_install_dir }}/node_exporter"
-        owner: node_exporter
-        group: node_exporter
-        mode: '0755'
-
-    - name: Crear archivo de servicio systemd para Node Exporter
-      copy:
-        dest: "{{ node_exporter_service_file }}"
-        content: |
-          [Unit]
-          Description=Node Exporter
-          Wants=network-online.target
-          After=network-online.target
-
-          [Service]
-          User=node_exporter
-          Group=node_exporter
-          Type=simple
-          ExecStart={{ node_exporter_install_dir }}/node_exporter
-
-          [Install]
-          WantedBy=multi-user.target
-      notify:
         - Recargar systemd
-        - Reiniciar Node Exporter
+        - Reiniciar Tomcat
 
-    - name: Asegurar que Node Exporter esté iniciado y habilitado
+    - name: Desplegar archivo WAR de la aplicación
+      copy:
+        src: "{{ source_war_path }}"
+        dest: "{{ target_webapps_dir }}/{{ app_war_file }}"
+        owner: tomcat
+        group: tomcat
+        mode: '0644'
+      notify:
+        - Reiniciar Tomcat
+
+    - name: Asegurar que el servicio Tomcat esté iniciado y habilitado
       systemd:
-        name: node_exporter
+        name: tomcat
         state: started
         enabled: yes
-        daemon_reload: yes
+        daemon_reload: yes # Asegura que systemd vea el nuevo archivo de servicio
 
   handlers:
     - name: Recargar systemd
       systemd:
         daemon_reload: yes
 
-    - name: Reiniciar Node Exporter
+    - name: Reiniciar Tomcat
       systemd:
-        name: node_exporter
+        name: tomcat
         state: restarted
 ```
