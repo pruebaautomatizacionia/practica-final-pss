@@ -5,94 +5,88 @@ name: CI Workflow para Terraform y Ansible
 on:
   pull_request:
     branches:
-      - main # Este workflow se activará en cada Pull Request dirigido a la rama 'main'
+      - main # Este workflow se activará en cada Pull Request dirigido a la rama 'main'.
 
 jobs:
-  # Job para validar y planificar la infraestructura de Terraform
+  # Job 1: Realiza validación, formateo y planificación de la infraestructura Terraform.
   terraform_checks:
     name: Terraform Validate & Plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Utiliza un runner de Ubuntu gestionado por GitHub Actions.
     defaults:
       run:
-        # Todos los comandos de Terraform se ejecutarán en el subdirectorio 'terraform'
-        # Esto es crucial porque 'main.tf' se encuentra en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/terraform
+        # Define que todos los comandos ejecutados en este job se harán dentro del directorio 'terraform'.
+        # Esto es necesario porque 'main.tf' está ubicado en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/terraform.
         working-directory: terraform
 
     steps:
       - name: Checkout del código
-        uses: actions/checkout@v3 # Descarga el código del repositorio
+        uses: actions/checkout@v3 # Acción para descargar el código del repositorio al runner.
 
       - name: Configurar Terraform
-        uses: hashicorp/setup-terraform@v2 # Configura Terraform CLI
+        uses: hashicorp/setup-terraform@v2 # Acción oficial para instalar y configurar Terraform CLI.
         with:
-          # Se recomienda especificar una versión específica o un rango compatible,
-          # para asegurar que el workflow sea reproducible y estable.
-          # Por ejemplo, "1.5.x" o "1.5.7".
-          terraform_version: 1.x.x 
+          # Se recomienda especificar una versión de Terraform para asegurar consistencia y reproducibilidad.
+          terraform_version: 1.x.x # Por ejemplo: "1.5.x" o "1.5.7".
 
       - name: Inicializar Terraform
         id: init
-        run: terraform init
+        run: terraform init # Inicializa el directorio de trabajo de Terraform (descarga plugins, configura backend).
 
       - name: Validar la configuración de Terraform
         id: validate
-        run: terraform validate -no-color
+        run: terraform validate -no-color # Realiza una comprobación de sintaxis y coherencia de la configuración Terraform.
 
       - name: Crear un plan de Terraform
         id: plan
-        # Para que 'terraform plan' pueda interactuar con AWS, necesita credenciales.
-        # Asegúrate de que los secretos AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY
-        # estén configurados en los ajustes de tu repositorio de GitHub:
+        # Para interactuar con AWS, el plan necesita credenciales.
+        # Estas deben configurarse como secretos en la configuración del repositorio de GitHub:
         # Settings -> Secrets and variables -> Actions -> New repository secret.
-        # Estos secretos son accesibles como ${{ secrets.NOMBRE_DEL_SECRETO }}.
+        # Nombres comunes: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY.
         run: terraform plan -no-color
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1 # Ajusta esta región si tu main.tf usa otra
+          AWS_DEFAULT_REGION: us-east-1 # Asegúrate de que esta región coincida con la definida en tu main.tf.
 
       - name: Mostrar el resultado del plan de Terraform
-        # Este paso es extremadamente útil para el proceso de Pull Request.
-        # Permite a los revisores ver los cambios propuestos en la infraestructura
-        # directamente en los logs del workflow antes de fusionar el código.
+        # Este paso es muy valioso para la revisión de Pull Requests.
+        # Presenta los cambios propuestos por Terraform directamente en los logs del workflow.
         run: |
           echo "Plan de Terraform generado:"
           echo "${{ steps.plan.outputs.stdout }}"
 
-  # Job para realizar un chequeo de sintaxis y linting de los playbooks de Ansible
+  # Job 2: Realiza verificaciones de sintaxis y estilo para los playbooks de Ansible.
   ansible_checks:
     name: Ansible Syntax Check & Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Ejecutar en un runner Ubuntu.
     defaults:
       run:
-        # Todos los comandos de Ansible se ejecutarán en el subdirectorio 'ansible'
-        # Esto es crucial porque 'main.yml' se encuentra en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/ansible
+        # Define que todos los comandos se ejecutarán dentro del directorio 'ansible'.
+        # Esto es necesario porque 'main.yml' está ubicado en https://github.com/pruebaautomatizacionia/practica-final-pss/tree/main/ansible.
         working-directory: ansible
 
     steps:
       - name: Checkout del código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3 # Descarga el código del repositorio.
 
       - name: Configurar Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x' # Instala la última versión estable de Python 3, ya que Ansible es una herramienta basada en Python.
+          python-version: '3.x' # Instala la última versión de Python 3, requerida por Ansible.
 
       - name: Instalar Ansible y dependencias
         run: |
-          python -m pip install --upgrade pip
-          pip install ansible ansible-lint # Instala Ansible para ejecutar playbooks y ansible-lint para validar mejores prácticas y estilo.
+          python -m pip install --upgrade pip # Actualiza pip para una instalación limpia.
+          pip install ansible ansible-lint # Instala Ansible y ansible-lint para la validación.
 
       - name: Ejecutar Ansible Lint
-        # ansible-lint es una herramienta invaluable que ayuda a identificar problemas de estilo,
-        # posibles errores, rendimiento y seguridad en los playbooks de Ansible.
-        # El '|| true' permite que el workflow continúe incluso si ansible-lint encuentra solo advertencias.
-        # Si prefieres que el Pull Request falle ante CUALQUIER advertencia de linting, elimina '|| true'.
+        # ansible-lint ayuda a identificar problemas de estilo, potenciales errores, y malas prácticas.
+        # '|| true' permite que el workflow continúe incluso si solo hay advertencias.
+        # Para un fallo estricto, elimina '|| true'.
         run: ansible-lint main.yml || true
 
       - name: Chequear la sintaxis del playbook de Ansible
-        # Este comando es una comprobación fundamental. Solo valida la sintaxis del archivo YAML del playbook.
-        # NO ejecuta ninguna tarea en servidores remotos ni comprueba la existencia de archivos, roles
-        # o variables referenciadas, solo asegura que el formato del playbook es válido.
+        # Verifica que el archivo YAML del playbook sea sintácticamente correcto.
+        # No ejecuta tareas ni valida la lógica del playbook.
         run: ansible-playbook --syntax-check main.yml
 ```
