@@ -1,6 +1,6 @@
 ```hcl
-# Nombre: terraform_aws_vpc_and_subnet.tf
-# Ejemplo 1: Crear una VPC y una subred pública en AWS
+# Nombre: terraform_aws_vpc.tf
+# Ejemplo 1: Crear una VPC en AWS
 
 provider "aws" {
   region = "us-east-1"
@@ -52,70 +52,43 @@ resource "aws_route_table_association" "public_association" {
   route_table_id = aws_route_table.public_route_table.id
 }
 
-# Nombre: terraform_azure_vm.tf
-# Ejemplo 2: Crear una máquina virtual Linux en Azure
+# Nombre: terraform_aws_ec2_instance.tf
+# Ejemplo 2: Crear una instancia EC2 en AWS
 
-provider "azurerm" {
-  features {}
-}
+resource "aws_instance" "web" {
+  ami                    = "ami-0c55b159cbfafe1f0" # Amazon Linux 2
+  instance_type         = "t2.micro"
+  key_name              = "my-key-pair"
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
 
-resource "azurerm_resource_group" "my_rg" {
-  name     = "example-resource-group"
-  location = "East US"
-}
-
-resource "azurerm_virtual_network" "my_vnet" {
-  name                = "example-vnet"
-  location            = azurerm_resource_group.my_rg.location
-  resource_group_name = azurerm_resource_group.my_rg.name
-  address_space       = ["10.0.0.0/16"]
-}
-
-resource "azurerm_subnet" "my_subnet" {
-  name                 = "example-subnet"
-  resource_group_name  = azurerm_resource_group.my_rg.name
-  virtual_network_name = azurerm_virtual_network.my_vnet.name
-  address_prefixes     = ["10.0.1.0/24"]
-}
-
-resource "azurerm_network_interface" "my_nic" {
-  name                = "example-nic"
-  location            = azurerm_resource_group.my_rg.location
-  resource_group_name = azurerm_resource_group.my_rg.name
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.my_subnet.id
-    private_ip_address_allocation = "Dynamic"
+  tags = {
+    Name = "web-instance"
   }
 }
 
-resource "azurerm_linux_virtual_machine" "my_vm" {
-  name                = "example-vm"
-  resource_group_name = azurerm_resource_group.my_rg.name
-  location            = azurerm_resource_group.my_rg.location
-  size                = "Standard_B1s"
-  admin_username      = "adminuser"
+resource "aws_security_group" "web_sg" {
+  name        = "web-sg"
+  description = "Allow HTTP and SSH inbound traffic"
 
-  admin_ssh_key {
-    username   = "adminuser"
-    public_key = file("~/.ssh/id_rsa.pub")
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  network_interface_ids = [
-    azurerm_network_interface.my_nic.id,
-  ]
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "UbuntuServer"
-    sku       = "20.04-LTS"
-    version   = "latest"
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 ```
