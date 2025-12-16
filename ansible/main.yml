@@ -1,217 +1,133 @@
 ```yaml
 ---
-# Nombre: ansible_install_and_configure_nginx.yml
-# Playbook Ansible para instalar NGINX y desplegar una página de bienvenida simple en Ubuntu/Debian
-
-- hosts: web_servers
-  become: true # Ejecutar tareas con privilegios de root
-
-  tasks:
-    - name: Actualizar caché de apt
-      apt:
-        update_cache: yes
-
-    - name: Instalar NGINX
-      apt:
-        name: nginx
-        state: present
-
-    - name: Asegurar que NGINX esté iniciado y habilitado en el arranque
-      service:
-        name: nginx
-        state: started
-        enabled: yes
-
-    - name: Copiar página de índice HTML básica
-      copy:
-        content: |
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <title>¡Bienvenido!</title>
-              <style>
-                  body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-                  h1 { color: #333; }
-                  p { color: #666; }
-              </style>
-          </head>
-          <body>
-              <h1>¡Hola desde Ansible y NGINX!</h1>
-              <p>Esta es una página web de ejemplo desplegada automáticamente.</p>
-          </body>
-          </html>
-        dest: /var/www/html/index.nginx-debian.html
-        owner: www-data
-        group: www-data
-        mode: '0644'
-
-    - name: Configurar NGINX para usar la página de índice correcta (si se modificó el default)
-      # Este paso asume que el archivo de configuración por defecto de NGINX ya apunta a index.nginx-debian.html
-      # Si se necesita un vhost personalizado, se usaría 'template' o 'copy' para un archivo .conf.
-      lineinfile:
-        path: /etc/nginx/sites-available/default
-        regexp: '^\s*index'
-        line: '        index index.nginx-debian.html index.html index.htm;'
-      notify:
-        - Recargar NGINX
-
-  handlers:
-    - name: Recargar NGINX
-      service:
-        name: nginx
-        state: reloaded
-
----
-# Nombre: ansible_setup_firewall_ufw.yml
-# Playbook Ansible para configurar el firewall UFW en servidores Ubuntu
+# Nombre: ansible_manage_users.yml
+# Playbook Ansible para crear un usuario, añadirlo a un grupo y configurar SSH Keys
 
 - hosts: all
   become: true # Ejecutar tareas con privilegios de root
+
   vars:
-    # Puertos que queremos abrir
-    open_ports:
-      - 22/tcp  # SSH
-      - 80/tcp  # HTTP
-      - 443/tcp # HTTPS (si es necesario)
+    new_user_name: appuser
+    new_user_group: sudo # O 'docker', 'www-data', etc.
+    ssh_key_content: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..." # ¡REEMPLAZA con tu clave pública SSH real!
 
   tasks:
-    - name: Instalar UFW si no está presente
-      apt:
-        name: ufw
+    - name: Crear grupo "{{ new_user_group }}" si no existe
+      group:
+        name: "{{ new_user_group }}"
         state: present
 
-    - name: Denegar todas las conexiones entrantes por defecto
-      ufw:
-        direction: incoming
-        policy: deny
+    - name: Crear usuario "{{ new_user_name }}"
+      user:
+        name: "{{ new_user_name }}"
+        group: "{{ new_user_group }}"
+        groups: "{{ new_user_group }}" # Asegura que el usuario sea parte del grupo
+        append: yes # Añadir a grupos existentes si ya es miembro
+        shell: /bin/bash # Shell por defecto
+        create_home: yes # Crear directorio home
+        state: present
 
-    - name: Permitir todas las conexiones salientes por defecto
-      ufw:
-        direction: outgoing
-        policy: allow
+    - name: Crear directorio .ssh para el nuevo usuario
+      file:
+        path: "/home/{{ new_user_name }}/.ssh"
+        state: directory
+        owner: "{{ new_user_name }}"
+        group: "{{ new_user_name }}"
+        mode: '0700'
 
-    - name: Permitir puertos específicos
-      ufw:
-        rule: allow
-        port: "{{ item }}"
-        proto: tcp
-      loop: "{{ open_ports }}"
+    - name: Añadir clave pública SSH para el nuevo usuario
+      copy:
+        content: "{{ ssh_key_content }}"
+        dest: "/home/{{ new_user_name }}/.ssh/authorized_keys"
+        owner: "{{ new_user_name }}"
+        group: "{{ new_user_name }}"
+        mode: '0600'
+```
 
-    - name: Habilitar UFW
-      ufw:
-        state: enabled
-        # El 'force: yes' es crucial para no necesitar interacción manual,
-        # pero úsalo con precaución, podría bloquearte el acceso SSH si no está permitido.
-        # Asegúrate de que el puerto SSH (22) está en open_ports.
-        force: yes
-
-    - name: Verificar el estado de UFW (opcional)
-      command: ufw status verbose
-      register: ufw_status
-      changed_when: false # Este comando no cambia el estado del sistema
-
-    - name: Mostrar estado de UFW
-      debug:
-        msg: "{{ ufw_status.stdout_lines }}"
-
+```yaml
 ---
-# Nombre: ansible_deploy_java_application.yml
-# Playbook Ansible para desplegar una aplicación Java (WAR) en Apache Tomcat
+# Nombre: ansible_install_monitoring_tools.yml
+# Playbook Ansible para instalar herramientas de monitoreo básicas (htop, iftop, iotop)
+# compatible con sistemas basados en Debian y RedHat.
 
-- hosts: app_servers
-  become: true # Ejecutar tareas con privilegios de root
+- hosts: monitoring_targets
+  become: true
+
   vars:
-    java_version: 11
-    tomcat_version: 9
-    tomcat_base_dir: /opt/tomcat
-    app_name: mywebapp
-    app_war_file: mywebapp.war # Nombre del archivo WAR
-    # Asegúrate de que 'files/mywebapp.war' exista en tu directorio de playbooks
-    source_war_path: files/{{ app_war_file }}
-    target_webapps_dir: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}/webapps"
+    monitoring_packages:
+      - htop
+      - iftop
+      - iotop
+      - sysstat # Para herramientas como iostat, mpstat
 
   tasks:
-    - name: Actualizar caché de apt
+    - name: Actualizar caché de apt (Debian/Ubuntu)
       apt:
         update_cache: yes
+      when: ansible_os_family == "Debian"
 
-    - name: Instalar OpenJDK (Java Development Kit)
+    - name: Instalar paquetes de monitoreo (Debian/Ubuntu)
       apt:
-        name: "openjdk-{{ java_version }}-jdk"
+        name: "{{ monitoring_packages }}"
         state: present
+      when: ansible_os_family == "Debian"
 
-    - name: Descargar y extraer Apache Tomcat
-      unarchive:
-        src: "https://archive.apache.org/dist/tomcat/tomcat-{{ tomcat_version }}/v{{ tomcat_version }}.0.{{ tomcat_version }}0/bin/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0.tar.gz"
-        dest: "{{ tomcat_base_dir }}"
-        remote_src: yes
-        creates: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0"
+    - name: Actualizar caché de yum/dnf (RedHat/CentOS/Fedora)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Instalar paquetes de monitoreo (RedHat/CentOS/Fedora)
+      yum:
+        name: "{{ monitoring_packages }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+```
+
+```yaml
+---
+# Nombre: ansible_configure_application_settings.yml
+# Playbook Ansible para configurar un archivo de propiedades de aplicación y reiniciar el servicio
+
+- hosts: app_servers
+  become: true
+
+  vars:
+    app_config_path: /etc/myapp/application.properties
+    app_service_name: myapp
+    db_host: db.example.com
+    db_port: 5432
+    db_user: appuser
+    db_name: mydatabase
+
+  tasks:
+    - name: Crear directorio de configuración de la aplicación si no existe
+      file:
+        path: /etc/myapp
+        state: directory
         owner: root
         group: root
         mode: '0755'
-      vars:
-        # Aquí estoy usando una versión específica, podrías parametrizarla más si lo deseas
-        tomcat_major_version: "{{ tomcat_version }}.0"
-        tomcat_minor_version: "{{ tomcat_version }}0" # por ejemplo 9.0.76
 
-    - name: Crear enlace simbólico para la instalación de Tomcat
-      file:
-        src: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0"
-        dest: "{{ tomcat_base_dir }}/latest"
-        state: link
-        force: yes
-
-    - name: Crear usuario y grupo para Tomcat
-      user:
-        name: tomcat
-        group: tomcat
-        system: true
-        shell: /bin/false
-        create_home: false
-        state: present
-
-    - name: Cambiar propiedad de los archivos de Tomcat
-      file:
-        path: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}.0.{{ tomcat_version }}0"
-        owner: tomcat
-        group: tomcat
-        recurse: yes
-
-    - name: Configurar Tomcat como servicio systemd
+    - name: Generar archivo de configuración de la aplicación
       template:
-        src: templates/tomcat.service.j2 # Necesitarás crear este archivo template
-        dest: /etc/systemd/system/tomcat.service
-        owner: root
-        group: root
-        mode: '0644'
+        src: templates/application.properties.j2 # Necesitarás crear este archivo template
+        dest: "{{ app_config_path }}"
+        owner: myappuser # Usuario bajo el que se ejecuta la app
+        group: myappgroup # Grupo bajo el que se ejecuta la app
+        mode: '0640'
       notify:
-        - Recargar systemd
-        - Reiniciar Tomcat
+        - Reiniciar servicio de aplicación
 
-    - name: Desplegar archivo WAR de la aplicación
-      copy:
-        src: "{{ source_war_path }}"
-        dest: "{{ target_webapps_dir }}/{{ app_war_file }}"
-        owner: tomcat
-        group: tomcat
-        mode: '0644'
-      notify:
-        - Reiniciar Tomcat
-
-    - name: Asegurar que el servicio Tomcat esté iniciado y habilitado
+    - name: Asegurar que el servicio de la aplicación esté iniciado
       systemd:
-        name: tomcat
+        name: "{{ app_service_name }}"
         state: started
         enabled: yes
-        daemon_reload: yes # Asegura que systemd vea el nuevo archivo de servicio
 
   handlers:
-    - name: Recargar systemd
+    - name: Reiniciar servicio de aplicación
       systemd:
-        daemon_reload: yes
-
-    - name: Reiniciar Tomcat
-      systemd:
-        name: tomcat
+        name: "{{ app_service_name }}"
         state: restarted
 ```
