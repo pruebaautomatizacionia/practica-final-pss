@@ -1,4 +1,3 @@
-```hcl
 # Nombre: terraform_aws_s3_bucket.tf
 # Ejemplo 1: Creación de un bucket S3 básico en AWS
 
@@ -191,4 +190,13 @@ output "ec2_instance_private_ip" {
 
 # NOTA: El código de Ansible no se genera aquí, ya que está fuera del alcance
 # de este agente y del formato de archivo .tf.
-```
+# Sin embargo, el código Ansible que se solicitaría sería algo como:
+# ---
+# - hosts: your_target_hosts # Reemplazar con el grupo de hosts definido en tu inventario Ansible
+#   become: true
+#   tasks:
+#     - name: Example task from Ansible
+#       debug:
+#         msg: "This is an example Ansible task executed on {{ inventory_hostname }}"
+#
+# Este bloque se omitiría si la solicitud es exclusivamente para código Terraform.
