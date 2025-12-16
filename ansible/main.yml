@@ -1,0 +1,79 @@
+```yaml
+---
+# Nombre: ansible_install_nginx.yml
+# Playbook Ansible para instalar y configurar NGINX en un servidor Ubuntu
+
+- hosts: web_servers
+  become: true
+
+  tasks:
+    - name: Actualizar caché de apt
+      apt:
+        update_cache: yes
+
+    - name: Instalar NGINX
+      apt:
+        name: nginx
+        state: present
+
+    - name: Asegurar que NGINX esté iniciado y habilitado
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+```
+
+```yaml
+---
+# Nombre: ansible_setup_firewall.yml
+# Playbook Ansible para configurar UFW (Uncomplicated Firewall) en un servidor Ubuntu
+
+- hosts: web_servers
+  become: true
+
+  tasks:
+    - name: Instalar UFW
+      apt:
+        name: ufw
+        state: present
+
+    - name: Permitir tráfico SSH
+      ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Permitir tráfico HTTP
+      ufw:
+        rule: allow
+        name: '80'
+
+    - name: Habilitar UFW
+      ufw:
+        state: enabled
+        enable_logging: yes
+```
+
+```yaml
+---
+# Nombre: ansible_install_postgresql.yml
+# Playbook Ansible para instalar y configurar PostgreSQL en un servidor Ubuntu
+
+- hosts: db_servers
+  become: true
+
+  tasks:
+    - name: Actualizar caché de apt
+      apt:
+        update_cache: yes
+
+    - name: Instalar PostgreSQL
+      apt:
+        name: postgresql
+        state: present
+
+    - name: Asegurar que PostgreSQL esté iniciado y habilitado
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+```
