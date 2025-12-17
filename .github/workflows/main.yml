@@ -1,47 +1,28 @@
- Aquí está el ejemplo del archivo `github_actions_ci.yml` para ejecutar los scripts de Terraform y Ansible en GitHub Actions:
-
-```yaml
-name: CI/CD pipeline for PracticaFinalPSS
-
+ ```yaml
+---
+name: CI/CD for Terraform and Ansible
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
-
+    branches: [ master ]
 jobs:
-  ci:
+  build:
+    name: Build and Deploy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
-      - name: Set up Terraform environment
-        uses: hashicorp/terraform@v1.1.6
-        with:
-          terraform_version: '0.14.9'
-          tf_workspace: 'practica-final'
-          infrastructure_backend_path: ./terraform/backend/
-
-      - name: Terraform init and plan
+      - name: Setup AWS CLI
+        uses: aws-actions/amazon-ecs-cli@v1
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@master
+      - name: Initialize Terraform
+        run: terraform init -upgrade && terraform init
+      - name: Plan and Apply Terraform
         run: |
-          terraform init -no-color && \
-          terraform validate -no-color && \
-          terraform plan -out=tf.plan -var-file="./variables.tfvars" -no-color
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Terraform apply
-        if: github.event_name != 'push' && ! contains(github.event.pull_request.labels.*.name, 'ci')
-        run: |
-          terraform apply tf.plan -auto-approve -var-file="./variables.tfvars" -no-color
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Set up Ansible environment
-        run: |
-          pip install ansible boto3 awscli
-
-      - name: Run Ansible playbook
-        run: ansible-playbook ./ansible/main.yml --ask-vault-pass --ask-become-pass
+          terraform plan -out=tfplan.out
+          terraform apply tfplan.out
+          terraform output > terraform-outputs.txt
+      - name: Setup Ansible Environment
+        uses: ansible/setup@v2
+      - name: Run Ansible Playbook
+        run: ansible-playbook ./ansible/main.yml --ask-vault-pass --tags "deploy"
