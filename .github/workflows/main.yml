@@ -1,24 +1,85 @@
+name: Deploy Infraestructura y Configuración DevOps
 
----
-name: Terraform and Ansible CI/CD Workflow
-on: [push]
+on:
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: 'Ambiente de despliegue (ej: dev, staging)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
 jobs:
-  build:
-    name: Build and Deploy
-    runs-on: ubuntu-20.04
+  deploy-infra:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.ambiente }}
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@master
-      - name: Initialize Terraform
-        run: terraform init -backend-config=./bootstrap/backend.tf
-      - name: Plan and Apply Terraform (manual)
-        if: github.event_name == 'push' && contains(github.event.pull_request.labels.*.name, 'ci') != true
-        uses: hashicorp/terraform@v0
+      - name: Checkout Código del Repositorio
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------
+      # PASO 1: AGENTE TERRAFORM (Crear Infraestructura)
+      # ----------------------------------------------------
+
+      - name: 1. Instalar y Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 2. Inicializar Terraform
+        id: init
+        # CRÍTICO: Ejecutar INIT en la carpeta 'terraform'
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: 3. Planificar Cambios
+        id: plan
+        run: terraform plan -no-color
+        working-directory: ./terraform
+
+      - name: 4. Aplicar Cambios (Crear VMs y DB)
+        id: apply
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+        
+      # ----------------------------------------------------
+      # PASO 2: OBTENER INVENTARIO DE TERRAFORM
+      # ----------------------------------------------------
+
+      - name: 5. Obtener IPs de las VMs creadas para Inventario
+        id: get_ips
+        # CRÍTICO: Ejecutar output en la carpeta 'terraform'
+        run: |
+          # Lee el output de Terraform (asumiendo 'vm_public_ips' es un output en /terraform)
+          IP_JSON=$(terraform output -json vm_public_ips)
+          echo "vm_ips=$IP_JSON" >> $GITHUB_OUTPUT
+        working-directory: ./terraform
+        continue-on-error: false
+
+      # ----------------------------------------------------
+      # PASO 3: AGENTE ANSIBLE (Configurar VMs y DB)
+      # ----------------------------------------------------
+
+      - name: 6. Configurar SSH para Ansible
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          terraform_commands: plan && apply -auto-approve
-      - name: Setup Ansible
-        uses: ansible/playbook@v1
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          
+      - name: 7. Ejecutar Playbook Principal de Ansible
+        uses: dawidd6/action-ansible-playbook@v2
         with:
-          playbook: ./ansible/main.yml
+          # CRÍTICO: Apuntar al playbook dentro de la carpeta 'ansible'
+          playbook: ansible/main.yml
+          
+          # Se pasa el inventario generado por Terraform al playbook
+          inventory: |
+            [transfer_vms]
+            {% for ip in fromJson(steps.get_ips.outputs.vm_ips) %}
+            {{ ip }}
+            {% endfor %}
+            
+          # Especificar la clave SSH
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
