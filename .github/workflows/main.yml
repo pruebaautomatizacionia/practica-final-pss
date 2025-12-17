@@ -1,9 +1,7 @@
  ```yaml
 ---
 name: CI/CD for Terraform and Ansible
-on:
-  push:
-    branches: [ master ]
+on: [push]
 jobs:
   build:
     name: Build and Deploy
@@ -11,18 +9,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Setup AWS CLI
-        uses: aws-actions/amazon-ecs-cli@v1
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@master
       - name: Initialize Terraform
         run: terraform init -upgrade && terraform init
       - name: Plan and Apply Terraform
+        if: github.event_name == 'push' && contains(github.event.pull_request.labels.*.name, 'ci') != true
         run: |
           terraform plan -out=tfplan.out
           terraform apply tfplan.out
-          terraform output > terraform-outputs.txt
       - name: Setup Ansible Environment
         uses: ansible/setup@v2
       - name: Run Ansible Playbook
+        if: github.event_name == 'push' && contains(github.event.pull_request.labels.*.name, 'ci') != true
         run: ansible-playbook ./ansible/main.yml --ask-vault-pass --tags "deploy"
