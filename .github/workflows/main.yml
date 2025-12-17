@@ -1,4 +1,3 @@
-
 ---
 name: Terraform and Ansible CI/CD Workflow
 on: [push]
@@ -17,7 +16,7 @@ jobs:
         if: github.event_name == 'push' && contains(github.event.pull_request.labels.*.name, 'ci') != true
         uses: hashicorp/terraform@v0
         with:
-          terraform_commands: apply -auto-approve
+          terraform_commands: plan && apply -auto-approve
       - name: Setup Ansible
         uses: ansible/playbook@v1
         with:
