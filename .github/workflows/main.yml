@@ -1,4 +1,4 @@
- Aquí esta un ejemplo de cómo podría ser el archivo `github_actions_ci.yml` para ejecutar los scripts de Terraform y Ansible en un flujo de trabajo GitHub Actions activado manualmente:
+ Aquí está el ejemplo del archivo `github_actions_ci.yml` para ejecutar los scripts de Terraform y Ansible en GitHub Actions:
 
 ```yaml
 name: CI/CD pipeline for PracticaFinalPSS
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up TF environment
+      - name: Set up Terraform environment
         uses: hashicorp/terraform@v1.1.6
         with:
           terraform_version: '0.14.9'
@@ -39,5 +39,9 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Ansible playbook
+      - name: Set up Ansible environment
+        run: |
+          pip install ansible boto3 awscli
+
+      - name: Run Ansible playbook
         run: ansible-playbook ./ansible/main.yml --ask-vault-pass --ask-become-pass
