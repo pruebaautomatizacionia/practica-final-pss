@@ -1,6 +1,5 @@
-l
 ---
-name: Terraform and Ansible CI/CD Workflow
+name: CI/CD for Terraform and Ansible
 on: [push]
 jobs:
   build:
@@ -12,7 +11,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@master
       - name: Initialize Terraform
-        run: terraform init -backend-config=./bootstrap/backend.tf
+        run: terraform init
       - name: Plan and Apply Terraform (manual)
         if: github.event_name == 'push' && contains(github.event.pull_request.labels.*.name, 'ci') != true
         uses: hashicorp/terraform@v0
@@ -21,4 +20,4 @@ jobs:
       - name: Setup Ansible
         uses: ansible/playbook@v1
         with:
-          playbook: ./ansible/main.yml
+          playbook: main.yml
