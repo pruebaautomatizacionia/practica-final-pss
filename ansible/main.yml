@@ -11,35 +11,14 @@
       ansible.builtin.ansible_config:
         path=/etc/ansible
         item="[general]"
-      loop: "{{ lookup('file', '1_bootstrap_backend.yml') | from_yaml }}"
-      vars:
-        python_interpreter="{{ item.python_interpreter }}"
-      when: item.ansible_platform == ansible_facts['system']['distribution']
-    - name: Setup AWS CLI
+      loop: "{{ lookup('file', '1_bootstrap_backend.yml') }}"
+      with_items: "{{ _ansible_parsed | map(attribute='children') | flatten | selectattr('ansible_module','lookup') | map(attribute='args') | list }}"
+    - name: Install PostgreSQL
       ansible.builtin.apt:
-        name: awscli
+        name: postgresql
         state: present
-    - name: Install Python Requirements
-      pip:
-        requirements:
-          - boto3
-          - awswra
-          - psycopg2-binary
-
-  pre_tasks:
-    - name: Add Puppet repo key and add repo to sources list
-      ansible.builtin.apt_key_add:
-        url: https://apt.puppetlabs.com/apt/dists/puppetlabs-release-latest/debian-10-x86_64/puppetlabs-release-pc1-x86_64.asc
-      loop: "{{ lookup('file', '1_bootstrap_backend.yml') | from_yaml }}"
-    - name: Add Puppet repo to sources list
-      ansible.builtin.apt_repo:
-        repo: ppa:puppetlabs/puppet-debian-10
-        state: present
-        filename: puppetlabs-release-pc1-x86_64
-    - name: Install Puppet Agent and ensure it is running
-      apt:
-        name: puppet
-        state: present
-      puppet_agent:
-        ensure: running
-        state: enabled
+    - name: Ensure postgresql service is running and enabled
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: yes
