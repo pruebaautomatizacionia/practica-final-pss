@@ -1,12 +1,12 @@
----
-# Ansible Playbook: infrastructure_setup.yml
+ ---
+# Ansible Playbook: ansible_infrastructure.yml
 
 This playbook configures three VMs and a PostgreSQL database for the international transfer project. It assumes SSH access is configured to the target VMs.
 
 ## Variables
 
 ```yaml
-# vars/main.yml
+---
 ansible_user: ubuntu
 ansible_ssh_private_key_file: ~/.ssh/id_rsa
 web_servers:
@@ -14,137 +14,67 @@ web_servers:
   - host: 192.168.1.102
   - host: 192.168.1.103
 database_server:
-  host: 192.168.1.200
-  port: 5432
+  host: 192.168.1.104
   user: db_user
   password: db_password
-  name: international_transfer_db
 ```
 
-## Tasks: common_tasks.yml
+## Roles
+
+### Database Role
 
 ```yaml
-# roles/common/tasks/common_tasks.yml
-- name: Update apt cache
-  apt:
-    update_cache: yes
-  when: ansible_distribution == "Ubuntu"
-
-- name: Install common packages
-  apt:
-    name:
-      - python3
-      - python3-pip
-      - git
-      - vim
-    state: present
-  when: ansible_distribution == "Ubuntu"
+---
+- name: Install and configure PostgreSQL
+  hosts: "{{ database_server }}"
+  become: yes
+  roles:
+    - postgresql
 ```
 
-## Tasks: web_server_tasks.yml
+### PostgreSQL Role
 
 ```yaml
-# roles/web_server/tasks/web_server_tasks.yml
-- name: Install Nginx
-  apt:
-    name: nginx
-    state: present
-  when: ansible_distribution == "Ubuntu"
-
-- name: Start and enable Nginx
-  service:
-    name: nginx
-    state: started
-    enabled: yes
-  when: ansible_distribution == "Ubuntu"
-
-- name: Copy web server configuration (example - adjust as needed)
-  copy:
-    src: files/nginx.conf
-    dest: /etc/nginx/sites-available/default
-  notify:
-    - restart nginx
-```
-
-## Tasks: database_server_tasks.yml
-
-```yaml
-# roles/database_server/tasks/database_server_tasks.yml
-- name: Install PostgreSQL
+---
+- name: Ensure PostgreSQL is installed
   apt:
     name: postgresql
     state: present
-  when: ansible_distribution == "Ubuntu"
 
-- name: Create database
+- name: Create database and user
   postgresql_db:
-    name: "{{ database_server.name }}"
-    owner: postgres
+    name: "{{ item }}"
     state: present
-  when: ansible_distribution == "Ubuntu"
-
-- name: Create PostgreSQL user
-  postgresql_user:
-    name: "{{ database_server.user }}"
-    password: "{{ database_server.password }}"
-    priv: ALL
-    state: present
-    role: postgres
-  when: ansible_distribution == "Ubuntu"
-
-- name: Configure PostgreSQL
-  postgresql_setup:
-    state: present
-  when: ansible_distribution == "Ubuntu"
+    login_user: db_user
+  loop:
+    - international_transfer_db
 ```
 
-## Handler: restart_nginx.yml
+### Web Servers Role
 
 ```yaml
-# roles/common/handlers/restart_nginx.yml
-- name: restart nginx
-  service:
-    name: nginx
-    state: restarted
-```
-
-## Inventory: inventory.yml
-
-```yaml
-# inventory/inventory.yml
-all:
-  children:
-    web1:
-      hosts: "{{ web_servers[0] }}"
-    web2:
-      hosts: "{{ web_servers[1] }}"
-    web3:
-      hosts: "{{ web_servers[2] }}"
-    db:
-      hosts: "{{ database_server.host }}"
-```
-
-## Main Playbook: main.yml
-
-```yaml
-# main.yml
 ---
-- name: Configure Infrastructure
-  hosts: all
-  become: true
-  tasks:
-    - name: Include common tasks
-      include_tasks: common_tasks.yml
+- name: Install and configure Apache
+  hosts: web_servers
+  become: yes
+  roles:
+    - apache
 
-    - name: Configure Web Servers
-      hosts: web1,web2,web3
-      become: true
-      tasks:
-        - include_tasks: web_server_tasks.yml
+- name: Ensure Apache modules are installed
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - libapache2-mod-wsgi
+    - python3
+    - python3-pip
+    - python3-dev
+    - build-essential
 
-    - name: Configure Database Server
-      hosts: db
-      become: true
-      tasks:
-        - include_tasks: database_server_tasks.yml
+- name: Install required packages for web application
+  pip:
+    package: "{{ item }}"
+  loop:
+    - gunicorn
+    - boto3
 ```
