@@ -1,57 +1,43 @@
- ---
-name: Terraform and Ansible CI/CD Workflow
-on: workflow_dispatch
+ Aquí esta un ejemplo de cómo podría ser el archivo `github_actions_ci.yml` para ejecutar los scripts de Terraform y Ansible en un flujo de trabajo GitHub Actions activado manualmente:
+
+```yaml
+name: CI/CD pipeline for PracticaFinalPSS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
 jobs:
-  deploy:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
-      # Initialize Terraform and set variables
-      - name: Setup Terraform
-        id: terraform_setup
-        uses: hashicorp/terraform-action@v5.4.0
+      - name: Set up TF environment
+        uses: hashicorp/terraform@v1.1.6
         with:
-          terraform_version: '1.4.7'
-          backend: 'remote'
-          backend_config: '{"location": "https://github.com/pruebaautomatizacionia/practica-final-pss/actions/jobs/terraform_remote_state"}'
+          terraform_version: '0.14.9'
+          tf_workspace: 'practica-final'
+          infrastructure_backend_path: ./terraform/backend/
 
-      - name: Terraform Init
-        id: terraform_init
+      - name: Terraform init and plan
         run: |
-          terraform init -backend-config='{"location": "https://github.com/pruebaautomatizacionia/practica-final-pss/actions/jobs/terraform_remote_state"}'
+          terraform init -no-color && \
+          terraform validate -no-color && \
+          terraform plan -out=tf.plan -var-file="./variables.tfvars" -no-color
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      # Plan and Apply Terraform (can be separated into multiple steps for review)
-      - name: Terraform Plan and Apply
-        if: github.event_name != 'schedule'
-        id: terraform_apply
+      - name: Terraform apply
+        if: github.event_name != 'push' && ! contains(github.event.pull_request.labels.*.name, 'ci')
         run: |
-          terraform plan -out=tfplan
-          echo "terraform_plan=tfplan" >> $GITHUB_OUTPUT
-          terraform apply -auto-approve -input=tfplan
-          echo "terraform_apply=success" >> $GITHUB_OUTPUT
+          terraform apply tf.plan -auto-approve -var-file="./variables.tfvars" -no-color
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      # Create Ansible inventory file with the latest Terraform output
-      - name: Generate Ansible Inventory File
-        if: github.event_name == 'push' && github.ref != 'HEAD'
-        id: ansible_inventory
-        run: |
-          TF_VAR_db_password=$(cat $GITHUB_OUTPUT/terraform_apply)
-          cat << EOF > inventory.ini
-[web_servers]
-${{ each.value.public_ip }}
-
-[database]
-${{ aws_db_instance.database.address }}:5432:${aws_db_instance.database.username}
-EOF
-          echo "ansible_inventory=inventory.ini" >> $GITHUB_OUTPUT
-
-      # Run Ansible playbook
-      - name: Run Ansible Playbook
-        if: github.event_name == 'push' && github.ref != 'HEAD'
-        uses: dschemata/detox@v2
-        with:
-          detox_args: "apply -i ansible/main.yml"
-          inventory: ${{ env.HOME }}/inventory.ini
-          extra_vars: "TF_VAR_db_password=${TF_VAR_db_passwor
+      - name: Ansible playbook
+        run: ansible-playbook ./ansible/main.yml --ask-vault-pass --ask-become-pass
