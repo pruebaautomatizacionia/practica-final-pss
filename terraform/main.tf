@@ -15,7 +15,7 @@ provider "aws" {
 }
 
 # Define the VPC
-resource "aws_vpc" "vpc" {
+resource "aws_vpc" "main_vpc" {
   cidr_block = "10.0.0.0/16"
   tags = {
     Name = "international-transfer-vpc"
@@ -23,8 +23,8 @@ resource "aws_vpc" "vpc" {
 }
 
 # Define the Subnets
-resource "aws_subnet" "subnet1" {
-  vpc_id     = aws_vpc.vpc.id
+resource "aws_subnet" "public_subnet1" {
+  vpc_id     = aws_vpc.main_vpc.id
   cidr_block = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
@@ -32,8 +32,8 @@ resource "aws_subnet" "subnet1" {
   }
 }
 
-resource "aws_subnet" "subnet2" {
-  vpc_id     = aws_vpc.vpc.id
+resource "aws_subnet" "public_subnet2" {
+  vpc_id     = aws_vpc.main_vpc.id
   cidr_block = "10.0.2.0/24"
   availability_zone = "us-east-1b"
   tags = {
@@ -41,8 +41,8 @@ resource "aws_subnet" "subnet2" {
   }
 }
 
-resource "aws_subnet" "subnet3" {
-  vpc_id     = aws_vpc.vpc.id
+resource "aws_subnet" "public_subnet3" {
+  vpc_id     = aws_vpc.main_vpc.id
   cidr_block = "10.0.3.0/24"
   availability_zone = "us-east-1c"
   tags = {
@@ -50,11 +50,17 @@ resource "aws_subnet" "subnet3" {
   }
 }
 
+# Define the Database Subnet Group
+resource "aws_db_subnet_group" "db_subnet_group" {
+  name        = "international-transfer-db-subnet-group"
+  subnet_ids = [aws_subnet.public_subnet1.id, aws_subnet.public_subnet2.id, aws_subnet.public_subnet3.id]
+}
+
 # Define the Security Group
 resource "aws_security_group" "sg" {
   name        = "international-transfer-sg"
   description = "Security group for VMs and database"
-  vpc_id      = aws_vpc.vpc.id
+  vpc_id      = aws_vpc.main_vpc.id
 
   ingress {
     from_port   = 22
@@ -97,7 +103,7 @@ resource "aws_instance" "vm" {
   count         = 3
   ami           = "ami-0c55b71339999999" # Replace with your desired AMI ID
   instance_type = "t2.micro"
-  subnet_id     = aws_subnet.subnet1.id # Use subnet1 for all VMs
+  subnet_id     = aws_subnet.public_subnet1.id # Use public subnet 1 for all VMs
   vpc_security_group_ids = [aws_security_group.sg.id]
 
   tags = {
@@ -115,23 +121,7 @@ resource "aws_db_instance" "db" {
   username          = "db_user"
   password          = "db_password"
   skip_final_snapshot = true
+  db_subnet_group_name = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.sg.id]
-  db_subnet_group_name = "international-transfer-db-subnet-group" # Create a DB Subnet Group
-}
-
-# Create a DB Subnet Group
-resource "aws_db_subnet_group" "db_subnet_group" {
-  name       = "international-transfer-db-subnet-group"
-  subnet_ids = [aws_subnet.subnet1.id, aws_subnet.subnet2.id, aws_subnet.subnet3.id]
-}
-
-# Output the public IP addresses of the VMs
-output "vm_public_ips" {
-  value = [for vm in aws_instance.vm : vm.public_ip]
-}
-
-# Output the database endpoint
-output "db_endpoint" {
-  value = aws_db_instance.db.endpoint
 }
 ```
