@@ -16,8 +16,8 @@ jobs:
       - name: Plan and Apply Terraform
         if: github.event_name == 'push' && contains(github.event.pull_request.labels.*.name, 'ci') != true
         run: |
-          terraform plan
-          terraform apply --auto-approve
+          terraform plan -out=tfplan.out
+          terraform apply tfplan.out
       - name: Setup Ansible
         uses: ansible/playbook@v1
         with:
