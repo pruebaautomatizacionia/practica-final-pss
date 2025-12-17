@@ -1,28 +1,19 @@
 ---
-# Ansible Playbook para la configuración de la infraestructura
+# Ansible Playbook: infrastructure_setup.yml
 
-Este playbook Ansible configura tres VMs y una base de datos SQL para un proyecto de transferencia internacional.  Asume que ya tienes una conexión SSH configurada a las VMs.
+This playbook configures three VMs and a PostgreSQL database for the international transfer project. It assumes SSH access is configured to the target VMs.
 
 ## Variables
 
 ```yaml
-# variables.yml
+# vars/main.yml
 ansible_user: ubuntu
 ansible_ssh_private_key_file: ~/.ssh/id_rsa
-inventory:
-  web1:
-    host: 192.168.1.101
-    ansible_connection: ssh
-    ansible_user: ubuntu
-  web2:
-    host: 192.168.1.102
-    ansible_connection: ssh
-    ansible_user: ubuntu
-  web3:
-    host: 192.168.1.103
-    ansible_connection: ssh
-    ansible_user: ubuntu
-database:
+web_servers:
+  - host: 192.168.1.101
+  - host: 192.168.1.102
+  - host: 192.168.1.103
+database_server:
   host: 192.168.1.200
   port: 5432
   user: db_user
@@ -30,141 +21,130 @@ database:
   name: international_transfer_db
 ```
 
-## Playbook Ansible: infrastructure_setup.yml
+## Tasks: common_tasks.yml
 
 ```yaml
+# roles/common/tasks/common_tasks.yml
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  when: ansible_distribution == "Ubuntu"
+
+- name: Install common packages
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - git
+      - vim
+    state: present
+  when: ansible_distribution == "Ubuntu"
+```
+
+## Tasks: web_server_tasks.yml
+
+```yaml
+# roles/web_server/tasks/web_server_tasks.yml
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: present
+  when: ansible_distribution == "Ubuntu"
+
+- name: Start and enable Nginx
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+  when: ansible_distribution == "Ubuntu"
+
+- name: Copy web server configuration (example - adjust as needed)
+  copy:
+    src: files/nginx.conf
+    dest: /etc/nginx/sites-available/default
+  notify:
+    - restart nginx
+```
+
+## Tasks: database_server_tasks.yml
+
+```yaml
+# roles/database_server/tasks/database_server_tasks.yml
+- name: Install PostgreSQL
+  apt:
+    name: postgresql
+    state: present
+  when: ansible_distribution == "Ubuntu"
+
+- name: Create database
+  postgresql_db:
+    name: "{{ database_server.name }}"
+    owner: postgres
+    state: present
+  when: ansible_distribution == "Ubuntu"
+
+- name: Create PostgreSQL user
+  postgresql_user:
+    name: "{{ database_server.user }}"
+    password: "{{ database_server.password }}"
+    priv: ALL
+    state: present
+    role: postgres
+  when: ansible_distribution == "Ubuntu"
+
+- name: Configure PostgreSQL
+  postgresql_setup:
+    state: present
+  when: ansible_distribution == "Ubuntu"
+```
+
+## Handler: restart_nginx.yml
+
+```yaml
+# roles/common/handlers/restart_nginx.yml
+- name: restart nginx
+  service:
+    name: nginx
+    state: restarted
+```
+
+## Inventory: inventory.yml
+
+```yaml
+# inventory/inventory.yml
+all:
+  children:
+    web1:
+      hosts: "{{ web_servers[0] }}"
+    web2:
+      hosts: "{{ web_servers[1] }}"
+    web3:
+      hosts: "{{ web_servers[2] }}"
+    db:
+      hosts: "{{ database_server.host }}"
+```
+
+## Main Playbook: main.yml
+
+```yaml
+# main.yml
 ---
 - name: Configure Infrastructure
   hosts: all
   become: true
   tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-      when: ansible_distribution == "Ubuntu"
+    - name: Include common tasks
+      include_tasks: common_tasks.yml
 
-    - name: Install common packages
-      apt:
-        name:
-          - python3
-          - python3-pip
-          - git
-          - vim
-        state: present
-      when: ansible_distribution == "Ubuntu"
+    - name: Configure Web Servers
+      hosts: web1,web2,web3
+      become: true
+      tasks:
+        - include_tasks: web_server_tasks.yml
 
-    - name: Install PostgreSQL
-      apt:
-        name: postgresql
-        state: present
-      when: ansible_distribution == "Ubuntu"
-
-    - name: Create database
-      postgresql_db:
-        name: "{{ database.name }}"
-        owner: postgres
-        state: present
-      when: ansible_distribution == "Ubuntu"
-
-    - name: Create PostgreSQL user
-      postgresql_user:
-        name: "{{ database.user }}"
-        password: "{{ database.password }}"
-        priv: ALL
-        state: present
-        role: postgres
-      when: ansible_distribution == "Ubuntu"
-
-    - name: Configure PostgreSQL
-      postgresql_setup:
-        state: present
-      when: ansible_distribution == "Ubuntu"
-
-    - name: Install Nginx
-      apt:
-        name: nginx
-        state: present
-      when: ansible_distribution == "Ubuntu"
-
-    - name: Start and enable Nginx
-      service:
-        name: nginx
-        state: started
-        enabled: yes
-      when: ansible_distribution == "Ubuntu"
-
-    - name: Install Apache
-      apt:
-        name: apache2
-        state: present
-      when: ansible_distribution == "Ubuntu"
-
-    - name: Start and enable Apache
-      service:
-        name: apache2
-        state: started
-        enabled: yes
-      when: ansible_distribution == "Ubuntu"
+    - name: Configure Database Server
+      hosts: db
+      become: true
+      tasks:
+        - include_tasks: database_server_tasks.yml
 ```
-
-## Playbook Ansible: web_server_config.yml
-
-```yaml
----
-- name: Configure Web Servers
-  hosts: web1,web2,web3
-  become: true
-  tasks:
-    - name: Copy web server configuration
-      copy:
-        src: files/nginx.conf
-        dest: /etc/nginx/sites-available/default
-      notify:
-        - restart nginx
-
-    - name: Enable default Nginx site
-      file:
-        src: /etc/nginx/sites-available/default
-        dest: /etc/nginx/sites-enabled/default
-        state: link
-      notify:
-        - restart nginx
-
-    - name: Copy Apache web configuration
-      copy:
-        src: files/apache2.conf
-        dest: /etc/apache2/sites-available/000-default.conf
-      notify:
-        - restart apache2
-
-    - name: Enable default Apache site
-      file:
-        src: /etc/apache2/sites-available/000-default.conf
-        dest: /etc/apache2/sites-enabled/000-default.conf
-        state: link
-      notify:
-        - restart apache2
-```
-
-## Handler Ansible
-
-```yaml
-# handlers.yml
-handlers:
-  - name: restart nginx
-    service:
-      name: nginx
-      state: restarted
-
-  - name: restart apache2
-    service:
-      name: apache2
-      state: restarted
-```
-
-## Files (Ejemplos - deben crearse en el mismo directorio que el playbook)
-
-*   **files/nginx.conf:**  Contiene la configuración de Nginx.
-*   **files/apache2.conf:** Contiene la configuración de Apache.
-
-**Nota:**  Los archivos `nginx.conf` y `apache2.conf` deben ser creados y adaptados a las necesidades específicas del proyecto.  Este playbook proporciona una configuración básica.
