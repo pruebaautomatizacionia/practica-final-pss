@@ -21,12 +21,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/terraform-action@v5.4.0
         with:
           terraform_version: '1.4.7'
           backend: 'remote'
-          backend_config: '{"location": "https://github.com/pruebaautomatizacionia/practica-final-pss/actions/jobs/terraform_remote_state"} '
+          backend_config: '{"location": "https://github.com/pruebaautomatizacionia/practica-final-pss/actions/jobs/terraform_remote_state"}'
 
       - name: Terraform Init
         id: terraform-init
