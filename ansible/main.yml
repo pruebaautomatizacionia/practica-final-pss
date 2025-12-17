@@ -1,4 +1,4 @@
- ```yaml
+
 ---
 - name: Transfer International Project Setup
   hosts: all
@@ -43,4 +43,3 @@
       puppet_agent:
         ensure: running
         state: enabled
-```
