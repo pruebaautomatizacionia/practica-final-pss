@@ -1,85 +1,46 @@
- Voy a crear tres bloques YAML diferentes, cada uno dedicado a una tarea específica en la configuración de la infraestructura.
-
-1. `playbook-vm_creation`: Crear las 3 máquinas virtuales
-
-```yaml
+ ```yaml
 ---
-- name: Create VM for Transfer International Project
+- name: Transfer International Project Setup
   hosts: all
   vars:
-    vm_name: "transfer_{{ inventory_hostname }}"
-    os_image: centos8
+    aws_region: us-west-2
+    ansible_user: ec2-user # or your SSH username for the instances
+    ansible_ssh_private_key_file: ~/.ssh/my_key_pair.pem # or path to your private key
   tasks:
-    - name: Add VM to inventory
-      ansible.builtin.add_host:
-        name: "{{ vm_name }}"
-        groups: transfer_vms
-        ansible_ssh_user: root
-        ansible_python_interpreter: /usr/bin/python3
-    - name: Create VM using ansible-aws
-      community.general.aws:
-        region: "us-west-2"
-        state: present
-        instance_type: t2.micro
-        image_id: "{{ os_image }}"
-        key_name: my_key_pair
-        subnet_id: "subnet-013e754e7a89e3c7f"
-        associate_public_ip_address: yes
-        vpc_id: "vpc-0b6d9a6cd62781eb9"
-      when: inventory_hostname not in groups['transfer_vms']
-```
-
-2. `playbook-db_installation`: Instalar la base de datos SQL en las máquinas virtuales
-
-```yaml
----
-- name: Install Database for Transfer International Project
-  hosts: transfer_vms
-  tasks:
-    - name: Install MySQL/MariaDB
+    - name: Ensure ansible_python_interpreter is set
+      ansible.builtin.ansible_config:
+        path=/etc/ansible
+        item="[general]"
+      loop: "{{ lookup('file', '1_bootstrap_backend.yml') | from_yaml }}"
+      vars:
+        python_interpreter="{{ item.python_interpreter }}"
+      when: item.ansible_platform == ansible_facts['system']['distribution']
+    - name: Setup AWS CLI
       ansible.builtin.apt:
-        name: mysql-server
+        name: awscli
         state: present
-        update_cache: yes
-      when: ansible_os_family == 'Debian'
-    - name: Install MySQL/MariaDB
-      ansible.builtin.yum:
-        name: mysql-server
+    - name: Install Python Requirements
+      pip:
+        requirements:
+          - boto3
+          - awswra
+          - psycopg2-binary
+
+  pre_tasks:
+    - name: Add Puppet repo key and add repo to sources list
+      ansible.builtin.apt_key_add:
+        url: https://apt.puppetlabs.com/apt/dists/puppetlabs-release-latest/debian-10-x86_64/puppetlabs-release-pc1-x86_64.asc
+      loop: "{{ lookup('file', '1_bootstrap_backend.yml') | from_yaml }}"
+    - name: Add Puppet repo to sources list
+      ansible.builtin.apt_repo:
+        repo: ppa:puppetlabs/puppet-debian-10
         state: present
-      when: ansible_os_family == 'RedHat'
-```
-
-3. `playbook-db_configuration`: Configurar la base de datos SQL
-
-```yaml
----
-- name: Configure Database for Transfer International Project
-  hosts: transfer_db
-  vars:
-    db_user: "transfer"
-    db_password: "Transfer123!"
-    db_name: "transfer_international"
-    db_host: "{{ inventory_hostname }}"
-
-  tasks:
-    - name: Ensure MySQL/MariaDB service is running
-      ansible.builtin.service:
-        name: mysql
-        state: started
-        enabled: yes
-
-    - name: Create database and user
-      ansible.builtin.mysql_db:
-        dbname: "{{ db_name }}"
-        login_user: root
-        password: "{{ ansible_mysql_password }}"
+        filename: puppetlabs-release-pc1-x86_64
+    - name: Install Puppet Agent and ensure it is running
+      apt:
+        name: puppet
         state: present
-
-    - name: Grant all privileges on the new database to the new user
-      ansible.builtin.mysql_user:
-        user: "{{ db_user }}"
-        host: "%"
-        password: "{{ db_password }}"
-        priv: "*.*"
-        state: present
+      puppet_agent:
+        ensure: running
+        state: enabled
 ```
