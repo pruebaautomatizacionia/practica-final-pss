@@ -1,80 +1,85 @@
- ---
-# Ansible Playbook: ansible_infrastructure.yml
+ Voy a crear tres bloques YAML diferentes, cada uno dedicado a una tarea específica en la configuración de la infraestructura.
 
-This playbook configures three VMs and a PostgreSQL database for the international transfer project. It assumes SSH access is configured to the target VMs.
-
-## Variables
+1. `playbook-vm_creation`: Crear las 3 máquinas virtuales
 
 ```yaml
 ---
-ansible_user: ubuntu
-ansible_ssh_private_key_file: ~/.ssh/id_rsa
-web_servers:
-  - host: 192.168.1.101
-  - host: 192.168.1.102
-  - host: 192.168.1.103
-database_server:
-  host: 192.168.1.104
-  user: db_user
-  password: db_password
+- name: Create VM for Transfer International Project
+  hosts: all
+  vars:
+    vm_name: "transfer_{{ inventory_hostname }}"
+    os_image: centos8
+  tasks:
+    - name: Add VM to inventory
+      ansible.builtin.add_host:
+        name: "{{ vm_name }}"
+        groups: transfer_vms
+        ansible_ssh_user: root
+        ansible_python_interpreter: /usr/bin/python3
+    - name: Create VM using ansible-aws
+      community.general.aws:
+        region: "us-west-2"
+        state: present
+        instance_type: t2.micro
+        image_id: "{{ os_image }}"
+        key_name: my_key_pair
+        subnet_id: "subnet-013e754e7a89e3c7f"
+        associate_public_ip_address: yes
+        vpc_id: "vpc-0b6d9a6cd62781eb9"
+      when: inventory_hostname not in groups['transfer_vms']
 ```
 
-## Roles
-
-### Database Role
+2. `playbook-db_installation`: Instalar la base de datos SQL en las máquinas virtuales
 
 ```yaml
 ---
-- name: Install and configure PostgreSQL
-  hosts: "{{ database_server }}"
-  become: yes
-  roles:
-    - postgresql
+- name: Install Database for Transfer International Project
+  hosts: transfer_vms
+  tasks:
+    - name: Install MySQL/MariaDB
+      ansible.builtin.apt:
+        name: mysql-server
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+    - name: Install MySQL/MariaDB
+      ansible.builtin.yum:
+        name: mysql-server
+        state: present
+      when: ansible_os_family == 'RedHat'
 ```
 
-### PostgreSQL Role
+3. `playbook-db_configuration`: Configurar la base de datos SQL
 
 ```yaml
 ---
-- name: Ensure PostgreSQL is installed
-  apt:
-    name: postgresql
-    state: present
+- name: Configure Database for Transfer International Project
+  hosts: transfer_db
+  vars:
+    db_user: "transfer"
+    db_password: "Transfer123!"
+    db_name: "transfer_international"
+    db_host: "{{ inventory_hostname }}"
 
-- name: Create database and user
-  postgresql_db:
-    name: "{{ item }}"
-    state: present
-    login_user: db_user
-  loop:
-    - international_transfer_db
-```
+  tasks:
+    - name: Ensure MySQL/MariaDB service is running
+      ansible.builtin.service:
+        name: mysql
+        state: started
+        enabled: yes
 
-### Web Servers Role
+    - name: Create database and user
+      ansible.builtin.mysql_db:
+        dbname: "{{ db_name }}"
+        login_user: root
+        password: "{{ ansible_mysql_password }}"
+        state: present
 
-```yaml
----
-- name: Install and configure Apache
-  hosts: web_servers
-  become: yes
-  roles:
-    - apache
-
-- name: Ensure Apache modules are installed
-  apt:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - libapache2-mod-wsgi
-    - python3
-    - python3-pip
-    - python3-dev
-    - build-essential
-
-- name: Install required packages for web application
-  pip:
-    package: "{{ item }}"
-  loop:
-    - gunicorn
-    - boto3
+    - name: Grant all privileges on the new database to the new user
+      ansible.builtin.mysql_user:
+        user: "{{ db_user }}"
+        host: "%"
+        password: "{{ db_password }}"
+        priv: "*.*"
+        state: present
 ```
