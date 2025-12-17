@@ -1,144 +1,170 @@
 ---
-# Nombre: ansible_configure_webserver.yml
-# Playbook Ansible para configurar un servidor web (Nginx)
+# Ansible Playbook para la configuración de la infraestructura
 
-- hosts: webservers # Este es un grupo de hosts que deberías definir en tu inventario Ansible
-  become: true # Permite ejecutar tareas con privilegios de root
+Este playbook Ansible configura tres VMs y una base de datos SQL para un proyecto de transferencia internacional.  Asume que ya tienes una conexión SSH configurada a las VMs.
 
-  vars:
-    webserver_package: nginx
-    config_dir: /etc/nginx/sites-available
-    enabled_dir: /etc/nginx/sites-enabled
-    app_name: my_app_site # Nombre del sitio a configurar (ej. my_app_site)
+## Variables
 
+```yaml
+# variables.yml
+ansible_user: ubuntu
+ansible_ssh_private_key_file: ~/.ssh/id_rsa
+inventory:
+  web1:
+    host: 192.168.1.101
+    ansible_connection: ssh
+    ansible_user: ubuntu
+  web2:
+    host: 192.168.1.102
+    ansible_connection: ssh
+    ansible_user: ubuntu
+  web3:
+    host: 192.168.1.103
+    ansible_connection: ssh
+    ansible_user: ubuntu
+database:
+  host: 192.168.1.200
+  port: 5432
+  user: db_user
+  password: db_password
+  name: international_transfer_db
+```
+
+## Playbook Ansible: infrastructure_setup.yml
+
+```yaml
+---
+- name: Configure Infrastructure
+  hosts: all
+  become: true
   tasks:
-    - name: Asegurar que el paquete del servidor web está instalado
-      package:
-        name: "{{ webserver_package }}"
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Install common packages
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - git
+          - vim
         state: present
-      when: ansible_os_family == "Debian" # Ejemplo para sistemas basados en Debian/Ubuntu
+      when: ansible_distribution == "Ubuntu"
 
-    - name: Copiar archivo de configuración del sitio web
-      copy:
-        src: files/nginx/{{ app_name }}.conf # Asegúrate de tener un archivo llamado 'my_app_site.conf' en 'files/nginx/'
-        dest: "{{ config_dir }}/{{ app_name }}"
-        owner: root
-        group: root
-        mode: '0644'
-      notify:
-        - Recargar Nginx
+    - name: Install PostgreSQL
+      apt:
+        name: postgresql
+        state: present
+      when: ansible_distribution == "Ubuntu"
 
-    - name: Habilitar el sitio web (crear enlace simbólico)
-      file:
-        src: "{{ config_dir }}/{{ app_name }}"
-        dest: "{{ enabled_dir }}/{{ app_name }}"
-        state: link
-        force: yes # Sobreescribe si ya existe un enlace
-      notify:
-        - Recargar Nginx
+    - name: Create database
+      postgresql_db:
+        name: "{{ database.name }}"
+        owner: postgres
+        state: present
+      when: ansible_distribution == "Ubuntu"
 
-    - name: Asegurar que el servicio Nginx esté iniciado y habilitado
+    - name: Create PostgreSQL user
+      postgresql_user:
+        name: "{{ database.user }}"
+        password: "{{ database.password }}"
+        priv: ALL
+        state: present
+        role: postgres
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Configure PostgreSQL
+      postgresql_setup:
+        state: present
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Start and enable Nginx
       service:
-        name: "{{ webserver_package }}"
+        name: nginx
         state: started
         enabled: yes
+      when: ansible_distribution == "Ubuntu"
 
-  handlers:
-    - name: Recargar Nginx
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Start and enable Apache
       service:
-        name: "{{ webserver_package }}"
-        state: reloaded
+        name: apache2
+        state: started
+        enabled: yes
+      when: ansible_distribution == "Ubuntu"
+```
+
+## Playbook Ansible: web_server_config.yml
+
+```yaml
 ---
-# Nombre: terraform_aws_ec2_instance.tf
-# Ejemplo 1: Creación de una instancia EC2 de Amazon Web Services con acceso SSH
+- name: Configure Web Servers
+  hosts: web1,web2,web3
+  become: true
+  tasks:
+    - name: Copy web server configuration
+      copy:
+        src: files/nginx.conf
+        dest: /etc/nginx/sites-available/default
+      notify:
+        - restart nginx
 
-provider "aws" {
-  region = "us-east-1" # Reemplaza con tu región preferida
-}
+    - name: Enable default Nginx site
+      file:
+        src: /etc/nginx/sites-available/default
+        dest: /etc/nginx/sites-enabled/default
+        state: link
+      notify:
+        - restart nginx
 
-# Datos para obtener la AMI más reciente de Amazon Linux 2
-data "aws_ami" "amazon_linux_2" {
-  most_recent = true
-  owners      = ["amazon"]
+    - name: Copy Apache web configuration
+      copy:
+        src: files/apache2.conf
+        dest: /etc/apache2/sites-available/000-default.conf
+      notify:
+        - restart apache2
 
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
+    - name: Enable default Apache site
+      file:
+        src: /etc/apache2/sites-available/000-default.conf
+        dest: /etc/apache2/sites-enabled/000-default.conf
+        state: link
+      notify:
+        - restart apache2
+```
 
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
+## Handler Ansible
 
-# Se asume que ya existe una VPC, subred y un grupo de seguridad.
-# Aquí se usa un grupo de seguridad existente para simplificar.
-data "aws_security_group" "existing_sg" {
-  id = "sg-0abcdef1234567890" # ¡REEMPLAZA con el ID de tu grupo de seguridad existente!
-}
+```yaml
+# handlers.yml
+handlers:
+  - name: restart nginx
+    service:
+      name: nginx
+      state: restarted
 
-resource "aws_instance" "web_server" {
-  ami                    = data.aws_ami.amazon_linux_2.id
-  instance_type          = "t2.micro"
-  # Subred_id es necesaria si usas una VPC específica. Si no, puede omitirse para usar la VPC por defecto.
-  # subnet_id            = "subnet-0123456789abcdef0" # ¡REEMPLAZA con tu ID de subred si es necesario!
-  vpc_security_group_ids = [data.aws_security_group.existing_sg.id]
-  key_name               = "my-ssh-key" # ¡REEMPLAZA con el nombre de tu par de claves SSH en AWS!
+  - name: restart apache2
+    service:
+      name: apache2
+      state: restarted
+```
 
-  tags = {
-    Name        = "WebServerInstance"
-    Environment = "Development"
-  }
-}
+## Files (Ejemplos - deben crearse en el mismo directorio que el playbook)
 
-output "ec2_instance_public_ip" {
-  description = "La dirección IP pública de la instancia EC2."
-  value       = aws_instance.web_server.public_ip
-}
+*   **files/nginx.conf:**  Contiene la configuración de Nginx.
+*   **files/apache2.conf:** Contiene la configuración de Apache.
 
-output "ec2_instance_private_ip" {
-  description = "La dirección IP privada de la instancia EC2."
-  value       = aws_instance.web_server.private_ip
-}
-
-# Nombre: terraform_azure_storage_account.tf
-# Ejemplo 2: Creación de una cuenta de almacenamiento en Azure
-
-provider "azurerm" {
-  features {}
-}
-
-resource "azurerm_resource_group" "storage_rg" {
-  name     = "rg-storage-tf-example"
-  location = "East US" # Reemplaza con tu región preferida
-}
-
-resource "azurerm_storage_account" "sa" {
-  name                     = "stexampletf${random_string.suffix.result}" # Nombre único globalmente
-  resource_group_name      = azurerm_resource_group.storage_rg.name
-  location                 = azurerm_resource_group.storage_rg.location
-  account_tier             = "Standard_LRS"
-  account_replication_type = "LRS" # Locally-redundant storage
-
-  tags = {
-    environment = "TerraformExample"
-  }
-}
-
-resource "random_string" "suffix" {
-  length  = 6
-  special = false
-  upper   = false
-}
-
-output "storage_account_name" {
-  description = "El nombre de la cuenta de almacenamiento de Azure."
-  value       = azurerm_storage_account.sa.name
-}
-
-output "storage_account_primary_access_key" {
-  description = "La clave de acceso primaria de la cuenta de almacenamiento de Azure."
-  value       = azurerm_storage_account.sa.primary_access_key
-  sensitive   = true # Marca como sensible ya que es una clave de acceso
-}
+**Nota:**  Los archivos `nginx.conf` y `apache2.conf` deben ser creados y adaptados a las necesidades específicas del proyecto.  Este playbook proporciona una configuración básica.
