@@ -1,93 +1,75 @@
-```terraform
-# Configure the AWS Provider
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-# Configure the AWS region
+ ```hcl
+# Provider configuration
 provider "aws" {
-  region = "us-east-1"  # Change to your desired region
+  region = "us-east-1"
 }
 
-# Define the VPC
-resource "aws_vpc" "main_vpc" {
+# Create a VPC with public and private subnets
+resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
-  tags = {
-    Name = "international-transfer-vpc"
+}
+
+# Create internet gateway for the VPC
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+}
+
+# Create public subnet
+resource "aws_subnet" "public" {
+  count = 3
+  cidr_block = "10.0.${count.index + 1}.0/24"
+  vpc_id     = aws_vpc.main.id
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+}
+
+# Create route table for the public subnet
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
   }
 }
 
-# Define the Subnets
-resource "aws_subnet" "public_subnet1" {
-  vpc_id     = aws_vpc.main_vpc.id
-  cidr_block = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
-  tags = {
-    Name = "international-transfer-subnet-1"
-  }
+# Associate public subnet with route table
+resource "aws_route_table_association" "public" {
+  count = 3
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
 }
 
-resource "aws_subnet" "public_subnet2" {
-  vpc_id     = aws_vpc.main_vpc.id
-  cidr_block = "10.0.2.0/24"
-  availability_zone = "us-east-1b"
-  tags = {
-    Name = "international-transfer-subnet-2"
-  }
-}
-
-resource "aws_subnet" "public_subnet3" {
-  vpc_id     = aws_vpc.main_vpc.id
-  cidr_block = "10.0.3.0/24"
-  availability_zone = "us-east-1c"
-  tags = {
-    Name = "international-transfer-subnet-3"
-  }
-}
-
-# Define the Database Subnet Group
-resource "aws_db_subnet_group" "db_subnet_group" {
-  name        = "international-transfer-db-subnet-group"
-  subnet_ids = [aws_subnet.public_subnet1.id, aws_subnet.public_subnet2.id, aws_subnet.public_subnet3.id]
-}
-
-# Define the Security Group
+# Create security group for VMs and database
 resource "aws_security_group" "sg" {
   name        = "international-transfer-sg"
   description = "Security group for VMs and database"
-  vpc_id      = aws_vpc.main_vpc.id
 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production
+    cidr_blocks = ["0.0.0.0/0"] # Restrict in production
   }
 
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production
+    cidr_blocks = ["0.0.0.0/0"] # Restrict in production
   }
 
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production
+    cidr_blocks = ["0.0.0.0/0"] # Restrict in production
   }
 
   ingress {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production
+    cidr_blocks = ["10.0.0.0/16"] # Replace with the range of your private subnet
   }
 
   egress {
@@ -98,30 +80,14 @@ resource "aws_security_group" "sg" {
   }
 }
 
-# Define the VMs
-resource "aws_instance" "vm" {
-  count         = 3
-  ami           = "ami-0c55b71339999999" # Replace with your desired AMI ID
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.public_subnet1.id # Use public subnet 1 for all VMs
-  vpc_security_group_ids = [aws_security_group.sg.id]
-
-  tags = {
-    Name = "international-transfer-vm-${count.index + 1}"
-  }
-}
-
-# Define the PostgreSQL Database
-resource "aws_db_instance" "db" {
+# Create PostgreSQL DB instance and associated security group
+resource "aws_db_instance" "database" {
   allocated_storage = 20
   engine            = "postgres"
-  engine_version    = "15.4"
   instance_class    = "db.t2.micro"
   name              = "international_transfer_db"
   username          = "db_user"
-  password          = "db_password"
-  skip_final_snapshot = true
-  db_subnet_group_name = aws_db_subnet_group.db_subnet_group.name
+  password           = var.db_password
   vpc_security_group_ids = [aws_security_group.sg.id]
 }
 ```
