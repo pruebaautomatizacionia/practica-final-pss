@@ -48,7 +48,8 @@ jobs:
       # --- LOGICA DE EJECUCIÓN ---
       - name: Terraform Apply
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve -no-color | tee apply_output.txt
         working-directory: ./terraform
 
       - name: Terraform Destroy
