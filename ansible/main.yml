@@ -14,7 +14,7 @@
 
     - name: Secure MySQL configuration
       copy:
-        content: |
+      content: |
           bind-address = 0.0.0.0
           skip-name-resolve = yes
           bind_port: 3306
