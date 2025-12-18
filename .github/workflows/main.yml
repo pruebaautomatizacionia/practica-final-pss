@@ -94,4 +94,9 @@ jobs:
         with:
           playbook: ansible/main.yml
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          inventory: ${{ github.workspace }}/.ansible_inventory
+          #inventory: ${{ github.workspace }}/.ansible_inventory
+          inventory: |
+            [transfer_vms]
+            16.171.238.249
+            13.48.26.95
+            16.16.207.119
