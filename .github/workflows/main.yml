@@ -19,35 +19,40 @@ jobs:
   devops-job:
     runs-on: ubuntu-latest
     
-    # Definimos variables de entorno para AWS para que Terraform las use
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: "eu-north-1" # Según tu archivo backend.tf
+      AWS_REGION: "eu-north-1"
 
     steps:
       - name: Checkout Código
         uses: actions/checkout@v4
 
-      # ----------------------------------------------------
-      # CONFIGURACIÓN DE HERRAMIENTAS
-      # ----------------------------------------------------
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        # El init detectará automáticamente el backend S3 definido en tus archivos .tf
         run: terraform init
         working-directory: ./terraform
 
-      # ----------------------------------------------------
-      # LÓGICA DE TERRAFORM
-      # ----------------------------------------------------
+      # --- LOGICA DE PLAN Y REPORTE A N8N ---
       - name: Terraform Plan
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
-        run: terraform plan -no-color
+        id: plan
+        run: |
+          terraform plan -no-color > plan_output.txt
+          cat plan_output.txt
         working-directory: ./terraform
 
+      - name: Enviar Plan a n8n
+        if: github.event.inputs.accion == 'terraform_plan'
+        run: |
+          PLAN_TEXT=$(cat terraform/plan_output.txt)
+          curl -X POST "TU_URL_WEBHOOK_N8N" \
+            -H "Content-Type: application/json" \
+            -d "{\"status\": \"success\", \"action\": \"plan\", \"output\": \"$PLAN_TEXT\"}"
+
+      # --- LOGICA DE EJECUCIÓN ---
       - name: Terraform Apply
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
         run: terraform apply -auto-approve
@@ -58,21 +63,20 @@ jobs:
         run: terraform destroy -auto-approve
         working-directory: ./terraform
 
-      # ----------------------------------------------------
-      # LÓGICA DE ANSIBLE (Se activa si hay máquinas)
-      # ----------------------------------------------------
+      # --- GESTIÓN DE IPS (Extrae de S3 incluso en ansible_only) ---
       - name: Obtener IPs desde Backend S3
         id: get_ips
         if: contains(fromJson('["ansible_only", "full_deploy", "terraform_apply"]'), github.event.inputs.accion)
         run: |
-          # Extrae las IPs del estado guardado en el bucket S3
-          IP_JSON=$(terraform output -json vm_public_ips)
+          # Al estar el init hecho, output lee el estado actual en S3
+          IP_JSON=$(terraform output -json vm_public_ips || echo "[]")
           echo "vm_ips=$IP_JSON" >> $GITHUB_OUTPUT
         working-directory: ./terraform
-        continue-on-error: true
 
+      # --- EJECUCIÓN DE ANSIBLE ---
       - name: Ejecutar Ansible Playbook
-        if: steps.get_ips.outputs.vm_ips != '' && (github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy')
+        # Se ejecuta si hay IPs y la acción es ansible_only o full_deploy
+        if: steps.get_ips.outputs.vm_ips != '[]' && (github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy')
         uses: dawidd6/action-ansible-playbook@v2
         with:
           playbook: ansible/main.yml
