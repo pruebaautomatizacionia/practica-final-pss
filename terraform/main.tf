@@ -1,4 +1,3 @@
- terraform {
   backend "s3" {
     bucket = "infrabot-tf-state-pruebaautomatizacionia"
     key = "terraform/state.tfstate"
