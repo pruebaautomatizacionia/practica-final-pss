@@ -1,24 +1,39 @@
 
 ---
-- name: Transfer International Project Setup
-  hosts: all
+- hosts: transfer_vms
+  become: yes
+
   vars:
-    aws_region: us-west-2
-    ansible_user: ec2-user # or your SSH username for the instances
-    ansible_ssh_private_key_file: ~/.ssh/my_key_pair.pem # or path to your private key
+    web_app: |
+      ...
+      index.html
+      ...
+
   tasks:
-    - name: Ensure ansible_python_interpreter is set
-      ansible.builtin.ansible_config:
-        path=/etc/ansible
-        item="[general]"
-      loop: "{{ lookup('file', '1_bootstrap_backend.yml') }}"
-      with_items: "{{ _ansible_parsed | map(attribute='children') | flatten | selectattr('ansible_module','lookup') | map(attribute='args') | list }}"
-    - name: Install PostgreSQL
-      ansible.builtin.apt:
-        name: postgresql
+    - name: Install Apache2
+      apt:
+        name: apache2
         state: present
-    - name: Ensure postgresql service is running and enabled
-      ansible.builtin.service:
-        name: postgresql
+
+    - name: Install MySQL server
+      apt:
+        name: mysql-server
+        state: present
+
+    - name: Install PHP and PHP dependencies
+      apt:
+        name: php libapache2-mod-php php-{cli,common,curl,json,mbstring,xml}
+        state: present
+
+    - name: Copy web application
+      copy:
+        src: web_app
+        dest: /var/www/html
+        mode: '0644'
+        owner: www-data
+        group: www-data
+
+    - name: Ensure Apache2 service is enabled and running
+      service:
+        name: apache2
         state: started
-        enabled: yes
