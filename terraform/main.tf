@@ -1,4 +1,4 @@
-rm {
+ terraform {
   backend "s3" {
     bucket = "infrabot-tf-state-pruebaautomatizacionia"
     key = "terraform/state.tfstate"
@@ -76,4 +76,5 @@ rm {
 
   output "vm_public_ips" {
     value = aws_instance.web[*].public_ip
- 
+  }
+}
