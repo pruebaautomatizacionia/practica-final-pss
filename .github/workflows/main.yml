@@ -63,7 +63,7 @@ jobs:
           terraform apply -auto-approve -no-color | tee apply_output.txt
         working-directory: ./terraform
       - name: Save Apply Output to Repo
-        if: github.event.inputs.operacion == 'terraform_apply'
+        if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
