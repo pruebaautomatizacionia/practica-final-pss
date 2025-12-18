@@ -22,7 +22,7 @@
           log_error: /var/log/mysqld.err
           socket: /var/run/mysqld/mysqld.sock
           pid_file: /var/run/mysqld/mysqld.pid
-      dest: /etc/mysql/mysql.cnf
+        dest: /etc/mysql/mysql.cnf
       mode: '0644'
 
     - name: Create database and user
