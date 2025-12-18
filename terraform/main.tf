@@ -1,4 +1,13 @@
 # File: main.tf
+terraform {
+  backend "s3" {
+    bucket         = "infrabot-tf-state-pruebaautomatizacionia"
+    key            = "terraform/state.tfstate"
+    region         = "eu-north-1"
+    dynamodb_table = "terraform-lock-table-infrabot"
+    encrypt        = true
+  }
+}
 
 provider "aws" {
   region = "us-west-2"
@@ -31,9 +40,7 @@ variable "vpc_id" {}
 variable "subnet_ids" {}
 variable "key_name" {}
 
-module "ec2_instances" {
-  source = "./modules/ec2_instance"
-
+resource "ec2_instances" {
   vpc_id     = var.vpc_id
   subnet_ids = var.subnet_ids
   ami        = data.aws_ami.centos8.id
@@ -41,11 +48,8 @@ module "ec2_instances" {
   instance_count = 3
 }
 
-module "rds" {
-  source = "./modules/rds"
-
+resource "rds" {
   vpc_id     = var.vpc_id
   subnet_ids = var.subnet_ids
   db_instance_class = "db.t2.micro"
 }
-```
