@@ -45,14 +45,6 @@ jobs:
           cat plan_output.txt
         working-directory: ./terraform
 
-      - name: Enviar Plan a n8n
-        if: github.event.inputs.accion == 'terraform_plan'
-        run: |
-          PLAN_TEXT=$(cat terraform/plan_output.txt)
-          curl -X POST "TU_URL_WEBHOOK_N8N" \
-            -H "Content-Type: application/json" \
-            -d "{\"status\": \"success\", \"action\": \"plan\", \"output\": \"$PLAN_TEXT\"}"
-
       # --- LOGICA DE EJECUCIÓN ---
       - name: Terraform Apply
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
