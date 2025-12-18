@@ -1,54 +1,70 @@
+transfer_vms
+become: yes
+remote_user: ubuntu
 
----
-- hosts: transfer_vms
-  become: yes
+tasks:
+- name: Update package lists
+  apt:
+    update_cache: yes
 
-  vars:
-    database_password: secret
+- name: Install MariaDB
+  apt:
+    pkgs:
+      - mariadb-server
 
-  tasks:
-    - name: Install necessary packages
-      apt:
-        name: "[mysql-server libmysqlclient-dev openssh-server]"
-        state: present
+- name: Secure MariaDB
+  mariadb_user:
+    user: transferuser
+    password: "transferpassword"
+    state: present
 
-    - name: Secure MySQL configuration
-      copy:
-        content: |
-          bind-address = 0.0.0.0
-          skip-name-resolve = yes
-          bind_port: 3306
-          datadir: /var/lib/mysql
-          log_error: /var/log/mysqld.err
-          socket: /var/run/mysqld/mysqld.sock
-          pid_file: /var/run/mysqld/mysqld.pid
-        dest: /etc/mysql/mysql.cnf
-        mode: '0644'
+  mariadb_db:
+    name: transferdatabase
+    state: present
 
-    - name: Create database and user
-      mysql_db:
-        name: transfer_database
-        user: transfer_user
-        password: "{{ database_password }}"
-        dbcollation: utf8mb4_general_ci
-      when: ansible_os_family == 'Debian'
+- name: Grant privileges to the transferuser on the transferdatabase
+  mysql_user:
+    user: transferuser
+    priv: ALL ON transferdatabase.* TO 'transferuser'@'localhost'
+    state: present
 
-    - name: Set up replication master for transfer_database
-      mysql_replication:
-        user: transfer_user
-        password: "{{ database_password }}"
-        master_host: "{{ inventory_hostname }}"
-        master_port: 3306
-        master_user: transfer_user
-        master_password: "{{ database_password }}"
-        master_log_file: mysql-bin.000001
-      when: ansible_os_family == 'Debian'
+- name: Install Ansible
+  apt:
+    pkgs:
+      - software-properties-common
+      - ansible
 
-    - name: Configure firewall to allow SSH and MySQL access
-      apt:
-        name: "{{ item }}"
-        state: present
-      loop:
-        - ufw
-        - ufw-data
-      when: ansible_os_family == 'Debian'
+- name: Copy Ansible playbooks and inventory file to the remote machines
+  copy:
+    src: /path/to/ansible/files/*
+    dest: /home/ubuntu/
+    mode: '0644'
+
+- name: Run ansible-playbook to configure the servers
+  command: ansible-playbook -i /home/ubuntu/inventory.yml /path/to/ansible/playbooks/main.yml --limit {{ inventory_hostname }}
+  args:
+    executable: /usr/bin/python3
+
+- name: Install necessary packages for the project
+  apt:
+    pkgs:
+      - package1
+      - package2
+      - package3
+
+- name: Download and install some files
+  get_url:
+    url: https://example.com/files/file1.tar.gz
+    dest: /tmp/file1.tar.gz
+    mode: '0644'
+
+- name: Extract the downloaded file
+  command: tar -xzf /tmp/file1.tar.gz -C /tmp
+  args:
+    executable: /bin/bash
+
+- name: Copy the extracted files to their correct location
+  copy:
+    src: /tmp/extracted_files/*
+    dest: /path/to/destination/
+    mode: '06
