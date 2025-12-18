@@ -5,10 +5,6 @@
     dynamodb_table = "terraform-lock-table-infrabot"
   }
 
-  variables {
-    key_name = string
-  }
-
   data "aws_vpc" "default" {
     default = true
   }
@@ -35,6 +31,10 @@
     }
 
     owners = ["amazon"]
+  }
+
+  variable "key_name" {
+    type = string
   }
 
   resource "aws_security_group" "ansible_access" {
@@ -67,12 +67,12 @@
     count = 3
 
     instance_type = "t3.micro"
+    ami             = data.aws_ami.linux.id
     subnet_id     = data.aws_subnets.default.ids[0]
     vpc_security_group_ids = [aws_security_group.ansible_access.id]
-    ami             = data.aws_ami.linux.id
     key_name        = var.key_name
   }
 
   output "vm_public_ips" {
     value = aws_instance.web[*].public_ip
-  }
+  
