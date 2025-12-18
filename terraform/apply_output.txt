@@ -6,8 +6,8 @@ data.aws_vpc.default: Read complete after 2s [id=vpc-0e885a6be58c91bba]
 data.aws_subnets.default: Reading...
 data.aws_subnets.default: Read complete after 0s [id=eu-north-1]
 aws_instance.web[1]: Refreshing state... [id=i-0bb013b107f48fce0]
-aws_instance.web[0]: Refreshing state... [id=i-0c07bef42a5e9b82d]
 aws_instance.web[2]: Refreshing state... [id=i-07854619394b7cb17]
+aws_instance.web[0]: Refreshing state... [id=i-0c07bef42a5e9b82d]
 
 No changes. Your infrastructure matches the configuration.
 
