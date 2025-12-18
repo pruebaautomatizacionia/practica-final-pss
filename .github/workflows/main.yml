@@ -14,7 +14,9 @@ on:
           - terraform_destroy
           - ansible_only
           - full_deploy
-
+permissions:
+  contents: write
+  pull-requests: write
 jobs:
   devops-job:
     runs-on: ubuntu-latest
