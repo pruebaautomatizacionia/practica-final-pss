@@ -1,85 +1,84 @@
-name: Deploy Infraestructura y Configuración DevOps
+name: DevOps Control Panel (AWS Backend)
 
 on:
   workflow_dispatch:
     inputs:
-      ambiente:
-        description: 'Ambiente de despliegue (ej: dev, staging)'
+      accion:
+        description: 'Operación a realizar'
         required: true
-        default: 'dev'
+        default: 'terraform_plan'
         type: choice
         options:
-          - dev
-          - staging
-          - prod
+          - terraform_plan
+          - terraform_apply
+          - terraform_destroy
+          - ansible_only
+          - full_deploy
 
 jobs:
-  deploy-infra:
+  devops-job:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.ambiente }}
+    
+    # Definimos variables de entorno para AWS para que Terraform las use
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: "eu-north-1" # Según tu archivo backend.tf
 
     steps:
-      - name: Checkout Código del Repositorio
+      - name: Checkout Código
         uses: actions/checkout@v4
 
       # ----------------------------------------------------
-      # PASO 1: AGENTE TERRAFORM (Crear Infraestructura)
+      # CONFIGURACIÓN DE HERRAMIENTAS
       # ----------------------------------------------------
-
-      - name: 1. Instalar y Configurar Terraform
+      - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: 2. Inicializar Terraform
-        id: init
-        # CRÍTICO: Ejecutar INIT en la carpeta 'terraform'
+      - name: Terraform Init
+        # El init detectará automáticamente el backend S3 definido en tus archivos .tf
         run: terraform init
         working-directory: ./terraform
 
-      - name: 3. Planificar Cambios
-        id: plan
+      # ----------------------------------------------------
+      # LÓGICA DE TERRAFORM
+      # ----------------------------------------------------
+      - name: Terraform Plan
+        if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
         run: terraform plan -no-color
         working-directory: ./terraform
 
-      - name: 4. Aplicar Cambios (Crear VMs y DB)
-        id: apply
+      - name: Terraform Apply
+        if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
         run: terraform apply -auto-approve
         working-directory: ./terraform
-        
-      # ----------------------------------------------------
-      # PASO 2: OBTENER INVENTARIO DE TERRAFORM
-      # ----------------------------------------------------
 
-      - name: 5. Obtener IPs de las VMs creadas para Inventario
+      - name: Terraform Destroy
+        if: github.event.inputs.accion == 'terraform_destroy'
+        run: terraform destroy -auto-approve
+        working-directory: ./terraform
+
+      # ----------------------------------------------------
+      # LÓGICA DE ANSIBLE (Se activa si hay máquinas)
+      # ----------------------------------------------------
+      - name: Obtener IPs desde Backend S3
         id: get_ips
-        # CRÍTICO: Ejecutar output en la carpeta 'terraform'
+        if: contains(fromJson('["ansible_only", "full_deploy", "terraform_apply"]'), github.event.inputs.accion)
         run: |
-          # Lee el output de Terraform (asumiendo 'vm_public_ips' es un output en /terraform)
+          # Extrae las IPs del estado guardado en el bucket S3
           IP_JSON=$(terraform output -json vm_public_ips)
           echo "vm_ips=$IP_JSON" >> $GITHUB_OUTPUT
         working-directory: ./terraform
-        continue-on-error: false
+        continue-on-error: true
 
-      # ----------------------------------------------------
-      # PASO 3: AGENTE ANSIBLE (Configurar VMs y DB)
-      # ----------------------------------------------------
-
-      - name: 6. Configurar SSH para Ansible
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          
-      - name: 7. Ejecutar Playbook Principal de Ansible
+      - name: Ejecutar Ansible Playbook
+        if: steps.get_ips.outputs.vm_ips != '' && (github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy')
         uses: dawidd6/action-ansible-playbook@v2
         with:
-          # CRÍTICO: Apuntar al playbook dentro de la carpeta 'ansible'
           playbook: ansible/main.yml
-          
-          # Se pasa el inventario generado por Terraform al playbook
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           inventory: |
             [transfer_vms]
             {% for ip in fromJson(steps.get_ips.outputs.vm_ips) %}
             {{ ip }}
             {% endfor %}
-            
-          # Especificar la clave SSH
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
