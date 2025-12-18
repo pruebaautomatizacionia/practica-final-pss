@@ -1,4 +1,3 @@
- ```hcl
 # File: main.tf
 
 provider "aws" {
