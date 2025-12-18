@@ -44,6 +44,14 @@ jobs:
           terraform plan -no-color > plan_output.txt
           cat plan_output.txt
         working-directory: ./terraform
+      - name: Save Plan Output to Repo
+        if: github.event.inputs.operacion == 'terraform_plan'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add terraform/plan_output.txt
+          git commit -m "bot: update terraform plan output [skip ci]" || echo "No changes to commit"
+          git push
 
       # --- LOGICA DE EJECUCIÓN ---
       - name: Terraform Apply
@@ -51,7 +59,15 @@ jobs:
         run: |
           terraform apply -auto-approve -no-color | tee apply_output.txt
         working-directory: ./terraform
-
+      - name: Save Apply Output to Repo
+        if: github.event.inputs.operacion == 'terraform_apply'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add terraform/apply_output.txt
+          git commit -m "bot: update terraform apply output [skip ci]" || echo "No changes to commit"
+          git push
+          
       - name: Terraform Destroy
         if: github.event.inputs.accion == 'terraform_destroy'
         run: terraform destroy -auto-approve
