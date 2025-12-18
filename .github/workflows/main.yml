@@ -87,15 +87,11 @@ jobs:
         working-directory: ./terraform
 
       # --- EJECUCIÓN DE ANSIBLE ---
+      # Usamos el archivo que n8n ha creado y subido al repositorio
       - name: Ejecutar Ansible Playbook
-        # Se ejecuta si hay IPs y la acción es ansible_only o full_deploy
-        if: steps.get_ips.outputs.vm_ips != '[]' && (github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy')
+        if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
         uses: dawidd6/action-ansible-playbook@v2
         with:
           playbook: ansible/main.yml
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          inventory: |
-            [transfer_vms]
-            {% for ip in fromJson(steps.get_ips.outputs.vm_ips) %}
-            {{ ip }}
-            {% endfor %}
+          inventory: .ansible_inventory
