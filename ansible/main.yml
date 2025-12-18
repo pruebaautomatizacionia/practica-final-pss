@@ -1,4 +1,4 @@
-transfer_vms
+ transfer_vms
 become: yes
 remote_user: ubuntu
 
@@ -13,17 +13,17 @@ tasks:
       - mariadb-server
 
 - name: Secure MariaDB
-  mariadb_user:
+  mysql_user:
     user: transferuser
     password: "transferpassword"
     state: present
 
-  mariadb_db:
+  mysql_db:
     name: transferdatabase
     state: present
 
 - name: Grant privileges to the transferuser on the transferdatabase
-  mysql_user:
+  mysql_privilege:
     user: transferuser
     priv: ALL ON transferdatabase.* TO 'transferuser'@'localhost'
     state: present
