@@ -44,8 +44,9 @@ jobs:
           terraform plan -no-color > plan_output.txt
           cat plan_output.txt
         working-directory: ./terraform
+        
       - name: Save Plan Output to Repo
-        if: github.event.inputs.operacion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
+        if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
