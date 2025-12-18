@@ -34,7 +34,7 @@ data "aws_ami" "linux" {
 resource "aws_instance" "web" {
   count = 3
   ami           = data.aws_ami.linux.id
-  instance_type = "t2.micro"
+  instance_type = "t3.micro"
   key_name      = var.key_name
   subnet_id     = data.aws_subnets.default.ids[0]
 }
