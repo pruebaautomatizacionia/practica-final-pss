@@ -94,4 +94,4 @@ jobs:
         with:
           playbook: ansible/main.yml
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          inventory: .ansible_inventory
+          inventory: ${{ github.workspace }}/.ansible_inventory
