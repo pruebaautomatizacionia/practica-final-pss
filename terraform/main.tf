@@ -1,4 +1,3 @@
-# File: main.tf
 terraform {
   backend "s3" {
     bucket         = "infrabot-tf-state-pruebaautomatizacionia"
@@ -40,16 +39,40 @@ variable "vpc_id" {}
 variable "subnet_ids" {}
 variable "key_name" {}
 
-resource "ec2_instances" {
-  vpc_id     = var.vpc_id
-  subnet_ids = var.subnet_ids
-  ami        = data.aws_ami.centos8.id
-  key_name   = var.key_name
-  instance_count = 3
+### EC2 INSTANCES ###
+resource "aws_instance" "ec2" {
+  count         = 3
+  ami           = data.aws_ami.centos8.id
+  instance_type = "t3.micro"
+  subnet_id     = element(var.subnet_ids, count.index)
+  key_name      = var.key_name
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "ec2-instance-${count.index + 1}"
+    }
+  )
 }
 
-resource "rds" {
-  vpc_id     = var.vpc_id
+### RDS ###
+resource "aws_db_subnet_group" "rds" {
+  name       = "rds-subnet-group"
   subnet_ids = var.subnet_ids
-  db_instance_class = "db.t2.micro"
+
+  tags = local.common_tags
+}
+
+resource "aws_db_instance" "rds" {
+  identifier              = "rds-dev"
+  engine                  = "mysql"
+  engine_version          = "8.0"
+  instance_class          = "db.t3.micro"
+  allocated_storage       = 20
+  username                = "admin"
+  password                = "password123"
+  skip_final_snapshot     = true
+  db_subnet_group_name    = aws_db_subnet_group.rds.name
+
+  tags = local.common_tags
 }
