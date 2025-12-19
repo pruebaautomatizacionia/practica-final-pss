@@ -56,7 +56,8 @@ jobs:
         run: |
           terraform plan -out=tfplan -no-color
           terraform show -no-color tfplan > plan_output.txt
-          cat plan_output.txt
+          grep -A20 "Plan:" plan_output.txt
+
         working-directory: ./terraform
         
       - name: Upload Terraform Plan Artifact
