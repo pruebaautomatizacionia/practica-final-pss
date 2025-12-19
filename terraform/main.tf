@@ -109,5 +109,5 @@ resource "aws_instance" "web_server_2" {
   }
 }
 output "vm_public_ips" {
-  value = aws_instance.web[*].public_ip
+  value = [for vm in aws_instance : vm.public_ip]
 }
