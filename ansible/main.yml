@@ -2,28 +2,5 @@
 - hosts: all
   become: true
   gather_facts: false
-  vars:
-    mysql_password: my_secret_password
-
-  tasks:
-    - name: Install MySQL on Ubuntu
-      apt:
-        name: mysql-server
-        state: present
-
-    - name: Secure installation of MySQL
-      community.general.mysql_user:
-        username: myuser
-        password: "{{ mysql_password }}"
-        state: present
-
-    - name: Copy initial database schema
-      copy:
-        src: /path/to/schema.sql
-        dest: /tmp/schema.sql
-        owner: root
-        group: root
-
-    - name: Import schema to MySQL database
-      command: mysql -u root -p"{{ mysql_password }}" transferencia_internacional < /tmp/schema.sql
+  tasks: []
 ```
