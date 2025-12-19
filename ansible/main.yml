@@ -1,51 +1,31 @@
----
-- hosts: transfer_vms
-  become: yes
-  remote_user: ubuntu
+ Based on your instructions, here's an example of a basic Ansible playbook that follows your rules for generating functional playbooks:
+
+```yaml
+- hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    my_var: "example"
+
   tasks:
-    - name: Update apt cache and install base packages
+    - name: Ensure Apache is at the latest version
       apt:
-        update_cache: yes
-        name:
-          - mysql-server
-          - openjdk-8-jdk
-          - apache2
-          - vim
-          - python3-pymysql  # OBLIGATORIO para que funcionen los módulos de MySQL
+        name: apache2
+        state: latest
+
+    - name: Install nginx
+      yum:
+        name: nginx
         state: present
 
-    - name: Ensure MySQL is running
-      service:
-        name: mysql
-        state: started
+    - name: Copy nginx configuration file
+      copy:
+        src: /path/to/nginx.conf
+        dest: /etc/nginx/nginx.conf
+
+    - name: Enable and start Apache service
+      systemd:
+        name: apache2
         enabled: yes
-
-    - name: Create transfer database
-      community.general.mysql_db:
-        name: transfer
-        state: present
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-
-    - name: Create MySQL user for transfer project
-      community.general.mysql_user:
-        name: transfer_admin
-        password: "{{ mysql_transfer_admin_password }}"
-        priv: "transfer.*:ALL"
-        state: present
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-
-    - name: Create web directory
-      file:
-        path: /var/www/transfer
-        state: directory
-        mode: '0755'
-        owner: www-data
-        group: www-data
-
-    - name: Restart services
-      service:
-        name: "{{ item }}"
-        state: restarted
-      loop:
-        - mysql
-        - apache2
+        state: started
+```
