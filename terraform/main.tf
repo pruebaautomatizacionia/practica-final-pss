@@ -46,7 +46,7 @@ terraform {
    }
  }
 
- aws_security_group "ansible_access" {
+ resource "aws_security_group" "ansible_access" {
    name        = "ansible_access"
    description = "Allow SSH and MySQL access"
 
