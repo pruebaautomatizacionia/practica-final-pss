@@ -80,6 +80,6 @@ terraform {
    key_name = var.key_name
  }
 
- #output "vm_public_ips" {
- #  value = aws_instance.web[*].public_ip
-#}
+output "vm_public_ips" {
+   value = aws_instance.web[*].public_ip
+}
