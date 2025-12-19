@@ -64,9 +64,9 @@ jobs:
           exitcode=$?
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
 
-          if [ $exitcode -eq 0 ]; then
+          if [ $exitcode -eq 2 ]; then
             echo "No changes detected"
-          elif [ $exitcode -eq 2 ]; then
+          elif [ $exitcode -eq 0 ]; then
             echo "Changes detected"
             terraform show -no-color tfplan > plan_output.txt
             grep -A20 "Plan:" plan_output.txt
