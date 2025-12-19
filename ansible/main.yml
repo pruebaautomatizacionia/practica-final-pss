@@ -1,6 +1,5 @@
- ```yaml
+l
 - hosts: all
   become: true
   gather_facts: false
   tasks: []
-```
