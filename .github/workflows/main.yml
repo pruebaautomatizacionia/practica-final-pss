@@ -98,28 +98,22 @@ jobs:
 
       # --- GESTIÓN DE IPS DINÁMICAS (Para Ansible) ---
       # --- GESTIÓN DE IPS DINÁMICAS ---
-      - name: Extraer IPs del State de S3
+      - name: Obtener IPs desde Terraform Outputs
         id: get_ips
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy' || github.event.inputs.accion == 'terraform_apply'
         run: |
-          # Forzamos una actualización del estado desde S3
-          terraform refresh -no-color
-          
-          # Intentamos obtener las IPs. Si falla, esperamos 5 segundos y reintentamos.
-          IPS=$(terraform output -json vm_public_ips | jq -r '.[]' || echo "")
-          
-          if [ -z "$IPS" ]; then
-            echo "Esperando a que el estado se propague..."
-            sleep 5
-            IPS=$(terraform output -json vm_public_ips | jq -r '.[]')
-          fi
-
-          echo "lista_ips<<EOF" >> $GITHUB_OUTPUT
-          echo "$IPS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          IPS=$(terraform output -json vm_public_ips | jq -r '.[]')
+          echo "ips=$IPS" >> $GITHUB_OUTPUT
         working-directory: ./terraform
 
+
       # --- PREPARACIÓN DE ANSIBLE ---
+      - name: Install Ansible
+        if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
       - name: Install Ansible collections
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
         run: ansible-galaxy collection install community.general
@@ -131,13 +125,12 @@ jobs:
       # --- EJECUCIÓN DE ANSIBLE ---
       - name: Ejecutar Ansible Playbook
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
-        uses: dawidd6/action-ansible-playbook@v2
-        with:
-          playbook: ansible/main.yml
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # El inventario se construye con las IPs obtenidas dinámicamente
-          inventory: |
-            [transfer_vms]
-            ${{ steps.get_ips.outputs.lista_ips }}
-          options: |
+        run: |
+          INVENTORY=$(echo -e "[transfer_vms]\n${{ steps.get_ips.outputs.ips }}")
+          echo "Inventario generado:"
+          echo "$INVENTORY"
+
+          ansible-playbook ansible/main.yml \
+            --inventory <(echo "$INVENTORY") \
             --extra-vars "ansible_ssh_user=ubuntu"
+
