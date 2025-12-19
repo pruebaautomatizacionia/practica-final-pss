@@ -1,4 +1,4 @@
- ```hcl
+
 resource "aws_instance" "transferencia-internacional" {
   count = 2
 
@@ -32,4 +32,3 @@ resource "aws_db_instance" "rds_instance" {
     Owner       = var.owner
   }
 }
-```
