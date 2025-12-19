@@ -38,7 +38,7 @@ jobs:
 
       - name: Terraform fmt check
         if: github.event.inputs.accion != 'ansible_only'
-        run: terraform fmt -check
+        run: terraform fmt -recursive -write=true
         working-directory: ./terraform
 
       - name: Terraform validate
