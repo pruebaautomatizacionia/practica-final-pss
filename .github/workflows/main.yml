@@ -41,15 +41,15 @@ jobs:
         run: terraform fmt -recursive -write=true
         working-directory: ./terraform
 
-      - name: Terraform validate
-        if: github.event.inputs.accion != 'ansible_only'
-        run: terraform validate
-        working-directory: ./terraform
-
       - name: Terraform Init
         run: terraform init
         working-directory: ./terraform
 
+      - name: Terraform validate
+        if: github.event.inputs.accion != 'ansible_only'
+        run: terraform validate
+        working-directory: ./terraform
+        
       # --- LÓGICA DE TERRAFORM PLAN ---
       - name: Terraform Plan
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
