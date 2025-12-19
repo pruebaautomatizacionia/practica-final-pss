@@ -1,6 +1,6 @@
  ```hcl
 resource "aws_instance" "transferencia-internacional" {
-  count = 3
+  count = 2
 
   ami           = data.aws_ami.generic.id
   instance_type = "t2.micro"
@@ -31,10 +31,5 @@ resource "aws_db_instance" "rds_instance" {
     Project     = var.project
     Owner       = var.owner
   }
-}
-
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project}-rds-subnet-group"
-  subnet_ids = var.subnet_ids
 }
 ```
