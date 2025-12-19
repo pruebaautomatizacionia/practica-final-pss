@@ -109,7 +109,8 @@ resource "aws_instance" "web_server_2" {
   }
 }
 output "vm_public_ips" {
-  value = [
-    for inst in values(aws_instance) : inst.public_ip
-  ]
+  value = can(values(aws_instance))
+    ? [for inst in values(aws_instance) : inst.public_ip if inst.public_ip != null]
+    : []
 }
+
