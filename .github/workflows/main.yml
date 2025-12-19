@@ -65,8 +65,6 @@ jobs:
         with:
           name: terraform-plan
           path: terraform/tfplan
-        working-directory: ./terraform
-
 
       - name: Save Plan Output to Repo
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
