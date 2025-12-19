@@ -1,4 +1,4 @@
-e "aws_vpc" "main" {
+resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
 
@@ -80,4 +80,5 @@ resource "aws_instance" "vm_2" {
     Environment = var.environment
     Project     = "transferencia internacional"
     Owner       = var.owner
-  
+  }
+}
