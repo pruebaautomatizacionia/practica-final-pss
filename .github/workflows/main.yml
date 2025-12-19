@@ -84,7 +84,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: terraform/tfplan
+          path: ./terraform/tfplan
 
       - name: Save Plan Output to Repo
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
@@ -95,14 +95,7 @@ jobs:
           git commit -m "bot: update terraform plan output [skip ci]" || echo "No changes to commit"
           git push
 
-      # --- LÓGICA DE TERRAFORM APPLY ---
-      - name: Upload Plan Artifact
-        if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan
-          path: ./terraform/tfplan
-          
+      # --- LÓGICA DE TERRAFORM APPLY ---      
       - name: Download Terraform Plan Artifact
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
         uses: actions/download-artifact@v4
