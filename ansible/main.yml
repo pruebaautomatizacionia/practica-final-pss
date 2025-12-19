@@ -1,31 +1,29 @@
- Based on your instructions, here's an example of a basic Ansible playbook that follows your rules for generating functional playbooks:
-
-```yaml
+ ```yaml
 - hosts: all
   become: true
   gather_facts: false
   vars:
-    my_var: "example"
+    mysql_password: my_secret_password
 
   tasks:
-    - name: Ensure Apache is at the latest version
+    - name: Install MySQL on Ubuntu
       apt:
-        name: apache2
-        state: latest
-
-    - name: Install nginx
-      yum:
-        name: nginx
+        name: mysql-server
         state: present
 
-    - name: Copy nginx configuration file
-      copy:
-        src: /path/to/nginx.conf
-        dest: /etc/nginx/nginx.conf
+    - name: Secure installation of MySQL
+      community.general.mysql_user:
+        username: myuser
+        password: "{{ mysql_password }}"
+        state: present
 
-    - name: Enable and start Apache service
-      systemd:
-        name: apache2
-        enabled: yes
-        state: started
+    - name: Copy initial database schema
+      copy:
+        src: /path/to/schema.sql
+        dest: /tmp/schema.sql
+        owner: root
+        group: root
+
+    - name: Import schema to MySQL database
+      command: mysql -u root -p"{{ mysql_password }}" transferencia_internacional < /tmp/schema.sql
 ```
