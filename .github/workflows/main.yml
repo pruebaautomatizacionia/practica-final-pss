@@ -106,8 +106,10 @@ jobs:
         id: get_ips
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy' || github.event.inputs.accion == 'terraform_apply'
         run: |
-          IPS=$(terraform output -json vm_public_ips | jq -r '.[]')
-          echo "ips=$IPS" >> $GITHUB_OUTPUT
+          IPS=$(terraform show -json terraform.tfstate | jq -r '.. | .public_ip? // empty')
+          echo "ips<<EOF" >> $GITHUB_OUTPUT
+          echo "$IPS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
         working-directory: ./terraform
 
 
