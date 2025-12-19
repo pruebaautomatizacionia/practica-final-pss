@@ -28,12 +28,10 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: "eu-north-1"
       TF_VAR_key_name: ${{ secrets.AWS_KEY_NAME }}
-      env:
       TF_VAR_environment: "dev"
       TF_VAR_project: "prueba"
       TF_VAR_owner: "automacion"
-      TF_VAR_subnet_ids: '["${{ secrets.AWS_SUBNET_ID }}"]'
-
+      TF_VAR_subnet_ids: "[\"${{ secrets.AWS_SUBNET_ID }}\"]"
 
     steps:
       - name: Checkout Código
