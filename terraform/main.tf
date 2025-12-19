@@ -1,11 +1,3 @@
-terraform {
-  backend "s3" {
-    bucket         = "infrabot-tf-state-pruebaautomatizacionia"
-    key            = "terraform/state.tfstate"
-    region         = "eu-north-1"
-    dynamodb_table = "terraform-lock-table-infrabot"
-  }
-}
 data "aws_vpc" "default" {
   default = true
 }
