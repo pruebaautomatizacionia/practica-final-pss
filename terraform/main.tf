@@ -108,10 +108,4 @@ resource "aws_instance" "web_server_2" {
     Owner       = var.owner
   }
 }
-output "vm_public_ips" {
-  value = (
-    can(values(aws_instance))
-      ? compact([for inst in values(aws_instance) : try(inst.public_ip, "")])
-      : []
-  )
-}
+
