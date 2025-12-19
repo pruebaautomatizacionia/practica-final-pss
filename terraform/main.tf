@@ -4,10 +4,9 @@ data "aws_availability_zones" "available" {
 
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
 
   tags = {
+    Name        = "${var.project}-vpc"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
@@ -18,6 +17,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
+    Name        = "${var.project}-igw"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
@@ -26,11 +26,12 @@ resource "aws_internet_gateway" "main" {
 
 resource "aws_subnet" "public_1" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 1)
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 0)
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
   tags = {
+    Name        = "${var.project}-public-subnet-1"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
@@ -39,11 +40,12 @@ resource "aws_subnet" "public_1" {
 
 resource "aws_subnet" "public_2" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 2)
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 1)
   availability_zone       = data.aws_availability_zones.available.names[1]
   map_public_ip_on_launch = true
 
   tags = {
+    Name        = "${var.project}-public-subnet-2"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
@@ -59,6 +61,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
+    Name        = "${var.project}-public-rt"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
@@ -76,12 +79,11 @@ resource "aws_route_table_association" "public_2" {
 }
 
 resource "aws_security_group" "web_sg" {
-  name        = "${var.project}-${var.environment}-web-sg"
-  description = "Allow SSH and HTTP inbound traffic"
+  name        = "${var.project}-web-sg"
+  description = "Allow HTTP and SSH inbound traffic"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH from VPC"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -89,7 +91,6 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    description = "HTTP from internet"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -104,6 +105,7 @@ resource "aws_security_group" "web_sg" {
   }
 
   tags = {
+    Name        = "${var.project}-web-sg"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
@@ -127,7 +129,7 @@ resource "aws_instance" "web_server_1" {
   vpc_security_group_ids = [aws_security_group.web_sg.id]
 
   tags = {
-    Name        = "${var.project}-${var.environment}-web-1"
+    Name        = "${var.project}-web-server-1"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
@@ -142,7 +144,7 @@ resource "aws_instance" "web_server_2" {
   vpc_security_group_ids = [aws_security_group.web_sg.id]
 
   tags = {
-    Name        = "${var.project}-${var.environment}-web-2"
+    Name        = "${var.project}-web-server-2"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
