@@ -283,12 +283,5 @@ Terraform will perform the following actions:
     }
 
 Plan: 4 to add, 0 to change, 0 to destroy.
-
-Changes to Outputs:
-  + vm_public_ips = [
-      + (known after apply),
-      + (known after apply),
-      + (known after apply),
-    ]
 aws_security_group.ansible_access: Creating...
 ::error::Terraform exited with code 1.
