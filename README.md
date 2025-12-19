@@ -184,5 +184,5 @@ Es un ejemplo de **Platform Engineering aplicado con IA.**
 ## 📬 Contacto
 
 > Proyecto académico — evaluación profesional  
-Autor: *(tu nombre)*  
-Telegram Bot: *(opcional)*
+Autor: *pruebaautomatizacionia*  
+
