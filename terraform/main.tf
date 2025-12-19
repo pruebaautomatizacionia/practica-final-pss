@@ -1,83 +1,32 @@
-variable "aws_region" {}
+ Based on your instructions, here's a basic example of a Terraform script that follows your rules for generating AWS infrastructure. This script does not include any specific resources as I don't have a specific request from the user.
 
+```hcl
+terraform {
+  required_version = ">= 1.4.0"
+  backend "s3" {}
+}
+
+variable "aws_region" {}
 provider "aws" {
   region = var.aws_region
 }
 
-data "aws_vpc" "default" {
-  default = true
-}
+variable "environment" {}
+variable "project" {}
+variable "owner" {}
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-variable "key_name" {
-  type = string
-}
-
-provider "aws" {
-  region = "eu-north-1"
-}
-
-data "aws_ami" "linux" {
+data "aws_ami" "generic" {
+  owners = ["amazon"]
   most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
 }
 
-resource "aws_security_group" "ansible_access" {
-  name        = "ansible_access"
-  description = "Allow SSH and MySQL access"
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+    Owner       = var.owner
   }
 }
-
-resource "aws_instance" "web" {
-  count = 3
-
-  instance_type = "t3.micro"
-
-  ami = data.aws_ami.linux.id
-
-  subnet_id = data.aws_subnets.default.ids[0]
-
-  vpc_security_group_ids = [aws_security_group.ansible_access.id]
-
-  key_name = var.key_name
-}
-
-output "vm_public_ips" {
-  value = aws_instance.web[*].public_ip
-}
+```
