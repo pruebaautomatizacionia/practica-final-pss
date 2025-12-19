@@ -1,14 +1,13 @@
-
-hosts: all
-become: true
-gather_facts: false
-tasks:
-  - name: Ensure database package is installed
-    package:
-      name: mariadb-server
-      state: present
-  - name: Ensure database service is started and enabled
-    service:
-      name: mariadb
-      state: started
-      enabled: true
+- hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Ensure database package is installed
+      package:
+        name: mariadb-server
+        state: present
+    - name: Ensure database service is started and enabled
+      service:
+        name: mariadb
+        state: started
+        enabled: true
