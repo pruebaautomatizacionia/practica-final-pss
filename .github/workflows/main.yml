@@ -77,14 +77,14 @@ jobs:
         working-directory: ./terraform
 
       # --- GESTIÓN DE IPS (Extrae de S3 incluso en ansible_only) ---
-      - name: Obtener IPs desde Backend S3
-        id: get_ips
-        if: contains(fromJson('["ansible_only", "full_deploy", "terraform_apply"]'), github.event.inputs.accion)
-        run: |
-          # Al estar el init hecho, output lee el estado actual en S3
-          IP_JSON=$(terraform output -json vm_public_ips || echo "[]")
-          echo "vm_ips=$IP_JSON" >> $GITHUB_OUTPUT
-        working-directory: ./terraform
+      #- name: Obtener IPs desde Backend S3
+      #  id: get_ips
+      #  if: contains(fromJson('["ansible_only", "full_deploy", "terraform_apply"]'), github.event.inputs.accion)
+      #  run: |
+      #    # Al estar el init hecho, output lee el estado actual en S3
+      #    IP_JSON=$(terraform output -json vm_public_ips || echo "[]")
+      #    echo "vm_ips=$IP_JSON" >> $GITHUB_OUTPUT
+      #  working-directory: ./terraform
 
       # --- EJECUCIÓN DE ANSIBLE ---
       # Usamos el archivo que n8n ha creado y subido al repositorio
