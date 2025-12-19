@@ -2,6 +2,7 @@
 Terraform used the selected providers to generate the following execution
 plan. Resource actions are indicated with the following symbols:
   + create
+-/+ destroy and then create replacement
 
 Terraform will perform the following actions:
 
@@ -60,7 +61,9 @@ Terraform will perform the following actions:
       + tenancy                              = (known after apply)
       + user_data_base64                     = (known after apply)
       + user_data_replace_on_change          = false
-      + vpc_security_group_ids               = (known after apply)
+      + vpc_security_group_ids               = [
+          + "sg-0384ec0d8b412a6aa",
+        ]
 
       + capacity_reservation_specification (known after apply)
 
@@ -142,7 +145,9 @@ Terraform will perform the following actions:
       + tenancy                              = (known after apply)
       + user_data_base64                     = (known after apply)
       + user_data_replace_on_change          = false
-      + vpc_security_group_ids               = (known after apply)
+      + vpc_security_group_ids               = [
+          + "sg-0384ec0d8b412a6aa",
+        ]
 
       + capacity_reservation_specification (known after apply)
 
@@ -169,169 +174,44 @@ Terraform will perform the following actions:
       + root_block_device (known after apply)
     }
 
-  # aws_security_group.web_ssh will be created
-  + resource "aws_security_group" "web_ssh" {
-      + arn                    = (known after apply)
-      + description            = "Allow HTTP and SSH inbound traffic"
-      + egress                 = [
-          + {
-              + cidr_blocks      = [
-                  + "0.0.0.0/0",
-                ]
-              + from_port        = 0
-              + ipv6_cidr_blocks = []
-              + prefix_list_ids  = []
-              + protocol         = "-1"
-              + security_groups  = []
-              + self             = false
-              + to_port          = 0
-                # (1 unchanged attribute hidden)
-            },
-        ]
-      + id                     = (known after apply)
-      + ingress                = [
-          + {
-              + cidr_blocks      = [
-                  + "0.0.0.0/0",
-                ]
-              + from_port        = 22
-              + ipv6_cidr_blocks = []
-              + prefix_list_ids  = []
-              + protocol         = "tcp"
-              + security_groups  = []
-              + self             = false
-              + to_port          = 22
-                # (1 unchanged attribute hidden)
-            },
-          + {
-              + cidr_blocks      = [
-                  + "0.0.0.0/0",
-                ]
-              + from_port        = 80
-              + ipv6_cidr_blocks = []
-              + prefix_list_ids  = []
-              + protocol         = "tcp"
-              + security_groups  = []
-              + self             = false
-              + to_port          = 80
-                # (1 unchanged attribute hidden)
-            },
-        ]
-      + name                   = "prueba-web-ssh"
-      + name_prefix            = (known after apply)
-      + owner_id               = (known after apply)
-      + region                 = "eu-north-1"
-      + revoke_rules_on_delete = false
-      + tags                   = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-web-ssh-sg"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
-        }
-      + tags_all               = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-web-ssh-sg"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
-        }
-      + vpc_id                 = (known after apply)
-    }
-
-  # aws_subnet.public_1 will be created
-  + resource "aws_subnet" "public_1" {
-      + arn                                            = (known after apply)
-      + assign_ipv6_address_on_creation                = false
-      + availability_zone                              = "eu-north-1a"
-      + availability_zone_id                           = (known after apply)
-      + cidr_block                                     = "10.0.0.0/24"
-      + enable_dns64                                   = false
-      + enable_resource_name_dns_a_record_on_launch    = false
-      + enable_resource_name_dns_aaaa_record_on_launch = false
-      + id                                             = (known after apply)
+  # aws_subnet.public_1 is tainted, so must be replaced
+-/+ resource "aws_subnet" "public_1" {
+      ~ arn                                            = "arn:aws:ec2:eu-north-1:184425327828:subnet/subnet-0113461d15d14aa21" -> (known after apply)
+      ~ availability_zone_id                           = "eun1-az1" -> (known after apply)
+      - enable_lni_at_device_index                     = 0 -> null
+      ~ id                                             = "subnet-0113461d15d14aa21" -> (known after apply)
       + ipv6_cidr_block_association_id                 = (known after apply)
-      + ipv6_native                                    = false
-      + map_public_ip_on_launch                        = true
-      + owner_id                                       = (known after apply)
-      + private_dns_hostname_type_on_launch            = (known after apply)
-      + region                                         = "eu-north-1"
-      + tags                                           = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-1"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+      - map_customer_owned_ip_on_launch                = false -> null
+      ~ map_public_ip_on_launch                        = false -> true
+      ~ owner_id                                       = "184425327828" -> (known after apply)
+      ~ private_dns_hostname_type_on_launch            = "ip-name" -> (known after apply)
+        tags                                           = {
+            "Environment" = "dev"
+            "Name"        = "prueba-public-subnet-1"
+            "Owner"       = "automacion"
+            "Project"     = "prueba"
         }
-      + tags_all                                       = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-1"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
-        }
-      + vpc_id                                         = (known after apply)
+        # (13 unchanged attributes hidden)
     }
 
-  # aws_subnet.public_2 will be created
-  + resource "aws_subnet" "public_2" {
-      + arn                                            = (known after apply)
-      + assign_ipv6_address_on_creation                = false
-      + availability_zone                              = "eu-north-1b"
-      + availability_zone_id                           = (known after apply)
-      + cidr_block                                     = "10.0.1.0/24"
-      + enable_dns64                                   = false
-      + enable_resource_name_dns_a_record_on_launch    = false
-      + enable_resource_name_dns_aaaa_record_on_launch = false
-      + id                                             = (known after apply)
+  # aws_subnet.public_2 is tainted, so must be replaced
+-/+ resource "aws_subnet" "public_2" {
+      ~ arn                                            = "arn:aws:ec2:eu-north-1:184425327828:subnet/subnet-0c0c4d30b1907447a" -> (known after apply)
+      ~ availability_zone_id                           = "eun1-az2" -> (known after apply)
+      - enable_lni_at_device_index                     = 0 -> null
+      ~ id                                             = "subnet-0c0c4d30b1907447a" -> (known after apply)
       + ipv6_cidr_block_association_id                 = (known after apply)
-      + ipv6_native                                    = false
-      + map_public_ip_on_launch                        = true
-      + owner_id                                       = (known after apply)
-      + private_dns_hostname_type_on_launch            = (known after apply)
-      + region                                         = "eu-north-1"
-      + tags                                           = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-2"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+      - map_customer_owned_ip_on_launch                = false -> null
+      ~ map_public_ip_on_launch                        = false -> true
+      ~ owner_id                                       = "184425327828" -> (known after apply)
+      ~ private_dns_hostname_type_on_launch            = "ip-name" -> (known after apply)
+        tags                                           = {
+            "Environment" = "dev"
+            "Name"        = "prueba-public-subnet-2"
+            "Owner"       = "automacion"
+            "Project"     = "prueba"
         }
-      + tags_all                                       = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-2"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
-        }
-      + vpc_id                                         = (known after apply)
+        # (13 unchanged attributes hidden)
     }
 
-  # aws_vpc.main will be created
-  + resource "aws_vpc" "main" {
-      + arn                                  = (known after apply)
-      + cidr_block                           = "10.0.0.0/16"
-      + default_network_acl_id               = (known after apply)
-      + default_route_table_id               = (known after apply)
-      + default_security_group_id            = (known after apply)
-      + dhcp_options_id                      = (known after apply)
-      + enable_dns_hostnames                 = (known after apply)
-      + enable_dns_support                   = true
-      + enable_network_address_usage_metrics = (known after apply)
-      + id                                   = (known after apply)
-      + instance_tenancy                     = "default"
-      + ipv6_association_id                  = (known after apply)
-      + ipv6_cidr_block                      = (known after apply)
-      + ipv6_cidr_block_network_border_group = (known after apply)
-      + main_route_table_id                  = (known after apply)
-      + owner_id                             = (known after apply)
-      + region                               = "eu-north-1"
-      + tags                                 = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-vpc"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
-        }
-      + tags_all                             = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-vpc"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
-        }
-    }
-
-Plan: 6 to add, 0 to change, 0 to destroy.
+Plan: 4 to add, 0 to change, 2 to destroy.
