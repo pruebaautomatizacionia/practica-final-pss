@@ -2,59 +2,50 @@
 - hosts: transfer_vms
   become: yes
   remote_user: ubuntu
-
   tasks:
-  - name: Install packages
-    apt:
-      update_cache: yes
-      package_list:
-        - mysql-server
-        - mariadb-server
-        - openjdk-8-jdk
+    - name: Update apt cache and install base packages
+      apt:
+        update_cache: yes
+        name:
+          - mysql-server
+          - openjdk-8-jdk
+          - apache2
+          - vim
+          - python3-pymysql  # OBLIGATORIO para que funcionen los módulos de MySQL
+        state: present
+
+    - name: Ensure MySQL is running
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Create transfer database
+      community.general.mysql_db:
+        name: transfer
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Create MySQL user for transfer project
+      community.general.mysql_user:
+        name: transfer_admin
+        password: "{{ mysql_transfer_admin_password }}"
+        priv: "transfer.*:ALL"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Create web directory
+      file:
+        path: /var/www/transfer
+        state: directory
+        mode: '0755'
+        owner: www-data
+        group: www-data
+
+    - name: Restart services
+      service:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - mysql
         - apache2
-        - vim
-
-  - name: Copy mysql root password
-    copy:
-      dest: /etc/mysql/debian.cnf
-      content: 'root_password={{ mysql_root_password }}'
-      mode: '0644'
-
-  - name: Create MySQL database and user for transfer project
-    community.general.mysql_user:
-      name: transfer_admin
-      password: '{{ mysql_transfer_admin_password }}'
-      privileges: ALL
-      dbname: 'transfer'
-      state: present
-
-  - name: Update MariaDB/MySQL configuration to use new user and database for transfer project
-    community.general.mysqlconfig:
-      dbname: 'transfer'
-      username: 'transfer_admin'
-      password: '{{ mysql_transfer_admin_password }}'
-      privs: ALL
-      state: present
-
-  - name: Restart MySQL services for changes to take effect
-    service:
-      name: mysql
-      state: restarted
-
-  - name: Create local transfer project directory
-    file:
-      path: /var/www/transfer
-      state: directory
-      mode: '0755'
-
-  - name: Copy transfer project files to web server
-    copy:
-      src: /path/to/your/project/files
-      dest: '/var/www/transfer/'
-      mode: '0644'
-      recurse: yes
-
-  - name: Restart Apache service for changes to take effect
-    service:
-      name: apache2
-      state: restart
