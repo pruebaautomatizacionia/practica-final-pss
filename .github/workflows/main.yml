@@ -121,7 +121,12 @@ jobs:
         id: get_ips
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy' || github.event.inputs.accion == 'terraform_apply'
         run: |
-          IPS=$(terraform state pull | jq -r '.. | .public_ip? // empty')
+          IPS=$(terraform state pull | jq -r '
+           .resources[]
+           | select(.type=="aws_instance")
+           | .instances[].attributes.public_ip
+           | select(. != null)'
+           )
           echo "ips<<EOF" >> $GITHUB_OUTPUT
           echo "$IPS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
