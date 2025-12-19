@@ -108,3 +108,6 @@ resource "aws_instance" "web_server_2" {
     Owner       = var.owner
   }
 }
+output "vm_public_ips" {
+  value = aws_instance.web[*].public_ip
+}
