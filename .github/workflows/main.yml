@@ -96,13 +96,20 @@ jobs:
           git push
 
       # --- LÓGICA DE TERRAFORM APPLY ---
+      - name: Upload Plan Artifact
+        if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: ./terraform/tfplan
+          
       - name: Download Terraform Plan Artifact
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
           path: terraform
-          
+
       - name: Terraform Apply
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
         run: terraform apply -auto-approve tfplan
