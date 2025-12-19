@@ -32,6 +32,8 @@ jobs:
       TF_VAR_environment: "dev"
       TF_VAR_project: "prueba"
       TF_VAR_owner: "automacion"
+      TF_VAR_subnet_ids: '["${{ secrets.AWS_SUBNET_ID }}"]'
+
 
     steps:
       - name: Checkout Código
