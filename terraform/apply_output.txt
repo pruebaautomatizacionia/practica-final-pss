@@ -284,4 +284,15 @@ Terraform will perform the following actions:
 
 Plan: 4 to add, 0 to change, 0 to destroy.
 aws_security_group.ansible_access: Creating...
-::error::Terraform exited with code 1.
+aws_security_group.ansible_access: Creation complete after 5s [id=sg-00315873663c02144]
+aws_instance.web[0]: Creating...
+aws_instance.web[2]: Creating...
+aws_instance.web[1]: Creating...
+aws_instance.web[0]: Still creating... [00m10s elapsed]
+aws_instance.web[1]: Still creating... [00m10s elapsed]
+aws_instance.web[2]: Still creating... [00m10s elapsed]
+aws_instance.web[1]: Creation complete after 14s [id=i-09524f42825d3c13e]
+aws_instance.web[2]: Creation complete after 14s [id=i-00b5175422a6188c4]
+aws_instance.web[0]: Creation complete after 14s [id=i-0305fe9698c10f128]
+
+Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
