@@ -142,15 +142,19 @@ jobs:
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
         run: ansible-playbook ansible/main.yml --syntax-check
 
+      - name: Construir inventario Ansible
+        id: inventory
+        run: |
+          echo "[transfer_vms]" > inventory.ini
+          echo "${{ steps.get_ips.outputs.ips }}" >> inventory.ini
+          cat inventory.ini
+
+
       # --- EJECUCIÓN DE ANSIBLE ---
       - name: Ejecutar Ansible Playbook
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
         run: |
-          INVENTORY=$(echo -e "[transfer_vms]\n${{ steps.get_ips.outputs.ips }}")
-          echo "Inventario generado:"
-          echo "$INVENTORY"
-
           ansible-playbook ansible/main.yml \
-            --inventory <(echo "$INVENTORY") \
+            --inventory inventory.ini \
             --extra-vars "ansible_ssh_user=ubuntu"
 
