@@ -102,12 +102,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
-          path: ./terraform/plan-artifact
+          path: ./terraform
 
       - name: Terraform Apply
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
         run: terraform apply -auto-approve tfplan
-        working-directory: ./terraform/plan-artifact
+        working-directory: ./terraform
 
       # --- LÓGICA DE TERRAFORM DESTROY ---
       - name: Terraform Destroy
