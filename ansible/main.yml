@@ -21,7 +21,7 @@
       mode: '0644'
 
   - name: Create MySQL database and user for transfer project
-    community.general.mysqluser:
+    community.general.mysql_user:
       name: transfer_admin
       password: '{{ mysql_transfer_admin_password }}'
       privileges: ALL
