@@ -169,6 +169,60 @@ Terraform will perform the following actions:
       + root_block_device (known after apply)
     }
 
+  # aws_internet_gateway.gw will be created
+  + resource "aws_internet_gateway" "gw" {
+      + arn      = (known after apply)
+      + id       = (known after apply)
+      + owner_id = (known after apply)
+      + region   = "eu-north-1"
+      + tags     = {
+          + "Name" = "prueba-igw"
+        }
+      + tags_all = {
+          + "Name" = "prueba-igw"
+        }
+      + vpc_id   = (known after apply)
+    }
+
+  # aws_route_table.public will be created
+  + resource "aws_route_table" "public" {
+      + arn              = (known after apply)
+      + id               = (known after apply)
+      + owner_id         = (known after apply)
+      + propagating_vgws = (known after apply)
+      + region           = "eu-north-1"
+      + route            = [
+          + {
+              + cidr_block                 = "0.0.0.0/0"
+              + gateway_id                 = (known after apply)
+                # (11 unchanged attributes hidden)
+            },
+        ]
+      + tags             = {
+          + "Name" = "prueba-public-rt"
+        }
+      + tags_all         = {
+          + "Name" = "prueba-public-rt"
+        }
+      + vpc_id           = (known after apply)
+    }
+
+  # aws_route_table_association.public_1_assoc will be created
+  + resource "aws_route_table_association" "public_1_assoc" {
+      + id             = (known after apply)
+      + region         = "eu-north-1"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # aws_route_table_association.public_2_assoc will be created
+  + resource "aws_route_table_association" "public_2_assoc" {
+      + id             = (known after apply)
+      + region         = "eu-north-1"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
   # aws_security_group.web_ssh will be created
   + resource "aws_security_group" "web_ssh" {
       + arn                    = (known after apply)
@@ -217,22 +271,16 @@ Terraform will perform the following actions:
                 # (1 unchanged attribute hidden)
             },
         ]
-      + name                   = "prueba-web-ssh"
-      + name_prefix            = (known after apply)
+      + name                   = (known after apply)
+      + name_prefix            = "prueba-web-ssh-"
       + owner_id               = (known after apply)
       + region                 = "eu-north-1"
       + revoke_rules_on_delete = false
       + tags                   = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-web-ssh-sg"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-web-ssh-sg"
         }
       + tags_all               = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-web-ssh-sg"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-web-ssh-sg"
         }
       + vpc_id                 = (known after apply)
     }
@@ -255,16 +303,10 @@ Terraform will perform the following actions:
       + private_dns_hostname_type_on_launch            = (known after apply)
       + region                                         = "eu-north-1"
       + tags                                           = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-1"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-public-subnet-1"
         }
       + tags_all                                       = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-1"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-public-subnet-1"
         }
       + vpc_id                                         = (known after apply)
     }
@@ -287,16 +329,10 @@ Terraform will perform the following actions:
       + private_dns_hostname_type_on_launch            = (known after apply)
       + region                                         = "eu-north-1"
       + tags                                           = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-2"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-public-subnet-2"
         }
       + tags_all                                       = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-public-subnet-2"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-public-subnet-2"
         }
       + vpc_id                                         = (known after apply)
     }
@@ -321,17 +357,11 @@ Terraform will perform the following actions:
       + owner_id                             = (known after apply)
       + region                               = "eu-north-1"
       + tags                                 = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-vpc"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-vpc"
         }
       + tags_all                             = {
-          + "Environment" = "dev"
-          + "Name"        = "prueba-vpc"
-          + "Owner"       = "automacion"
-          + "Project"     = "prueba"
+          + "Name" = "prueba-vpc"
         }
     }
 
-Plan: 6 to add, 0 to change, 0 to destroy.
+Plan: 10 to add, 0 to change, 0 to destroy.
