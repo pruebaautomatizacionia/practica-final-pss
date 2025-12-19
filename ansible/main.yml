@@ -1,6 +1,7 @@
-transfer_vms
-become: yes
-remote_user: ubuntu
+---
+- hosts: transfer_vms
+  become: yes
+  remote_user: ubuntu
 
 tasks:
 - name: Install packages
