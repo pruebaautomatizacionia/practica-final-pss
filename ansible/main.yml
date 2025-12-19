@@ -1,70 +1,59 @@
- transfer_vms
+transfer_vms
 become: yes
 remote_user: ubuntu
 
 tasks:
-- name: Update package lists
+- name: Install packages
   apt:
     update_cache: yes
-
-- name: Install MariaDB
-  apt:
-    pkgs:
+    package_list:
+      - mysql-server
       - mariadb-server
+      - openjdk-8-jdk
+      - apache2
+      - vim
 
-- name: Secure MariaDB
-  mysql_user:
-    user: transferuser
-    password: "transferpassword"
-    state: present
-
-  mysql_db:
-    name: transferdatabase
-    state: present
-
-- name: Grant privileges to the transferuser on the transferdatabase
-  mysql_privilege:
-    user: transferuser
-    priv: ALL ON transferdatabase.* TO 'transferuser'@'localhost'
-    state: present
-
-- name: Install Ansible
-  apt:
-    pkgs:
-      - software-properties-common
-      - ansible
-
-- name: Copy Ansible playbooks and inventory file to the remote machines
+- name: Copy mysql root password
   copy:
-    src: /path/to/ansible/files/*
-    dest: /home/ubuntu/
+    dest: /etc/mysql/debian.cnf
+    content: 'root_password={{ mysql_root_password }}'
     mode: '0644'
 
-- name: Run ansible-playbook to configure the servers
-  command: ansible-playbook -i /home/ubuntu/inventory.yml /path/to/ansible/playbooks/main.yml --limit {{ inventory_hostname }}
-  args:
-    executable: /usr/bin/python3
+- name: Create MySQL database and user for transfer project
+  community.general.mysqluser:
+    name: transfer_admin
+    password: '{{ mysql_transfer_admin_password }}'
+    privileges: ALL
+    dbname: 'transfer'
+    state: present
 
-- name: Install necessary packages for the project
-  apt:
-    pkgs:
-      - package1
-      - package2
-      - package3
+- name: Update MariaDB/MySQL configuration to use new user and database for transfer project
+  community.general.mysqlconfig:
+    dbname: 'transfer'
+    username: 'transfer_admin'
+    password: '{{ mysql_transfer_admin_password }}'
+    privs: ALL
+    state: present
 
-- name: Download and install some files
-  get_url:
-    url: https://example.com/files/file1.tar.gz
-    dest: /tmp/file1.tar.gz
-    mode: '0644'
+- name: Restart MySQL services for changes to take effect
+  service:
+    name: mysql
+    state: restarted
 
-- name: Extract the downloaded file
-  command: tar -xzf /tmp/file1.tar.gz -C /tmp
-  args:
-    executable: /bin/bash
+- name: Create local transfer project directory
+  file:
+    path: /var/www/transfer
+    state: directory
+    mode: '0755'
 
-- name: Copy the extracted files to their correct location
+- name: Copy transfer project files to web server
   copy:
-    src: /tmp/extracted_files/*
-    dest: /path/to/destination/
-    mode: '06
+    src: /path/to/your/project/files
+    dest: '/var/www/transfer/'
+    mode: '0644'
+    recurse: yes
+
+- name: Restart Apache service for changes to take effect
+  service:
+    name: apache2
+    state: restar
