@@ -160,6 +160,8 @@ jobs:
       # --- EJECUCIÓN DE ANSIBLE ---
       - name: Ejecutar Ansible Playbook
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
           ansible-playbook ansible/main.yml \
             --inventory inventory.ini \
