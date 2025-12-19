@@ -36,6 +36,16 @@ jobs:
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Terraform fmt check
+        if: github.event.inputs.accion != 'ansible_only'
+        run: terraform fmt -check
+        working-directory: ./terraform
+
+      - name: Terraform validate
+        if: github.event.inputs.accion != 'ansible_only'
+        run: terraform validate
+        working-directory: ./terraform
+
       - name: Terraform Init
         run: terraform init
         working-directory: ./terraform
@@ -113,6 +123,10 @@ jobs:
       - name: Install Ansible collections
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
         run: ansible-galaxy collection install community.general
+        
+      - name: Ansible syntax check
+        if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
+        run: ansible-playbook ansible/main.yml --syntax-check
 
       # --- EJECUCIÓN DE ANSIBLE ---
       - name: Ejecutar Ansible Playbook
