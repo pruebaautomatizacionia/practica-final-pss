@@ -1,15 +1,6 @@
 
+---
 - hosts: all
   become: true
   gather_facts: false
   tasks:
-    - name: Install SQL database package
-      package:
-        name: mariadb-server
-        state: present
-
-    - name: Start SQL database service
-      service:
-        name: mariadb
-        state: started
-        enabled: true
