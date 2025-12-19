@@ -1,11 +1,11 @@
-rm {
- backend "s3" {
-   bucket = "infrabot-tf-state-pruebaautomatizacionia"
-   key    = "terraform/state.tfstate"
-   region = "eu-north-1"
-   dynamodb_table = "terraform-lock-table-infrabot"
- }
-
+terraform {
+  backend "s3" {
+    bucket = "infrabot-tf-state-pruebaautomatizacionia"
+    key    = "terraform/state.tfstate"
+    region = "eu-north-1"
+    dynamodb_table = "terraform-lock-table-infrabot"
+  }
+}
  data "aws_vpc" "default" {
    default = true
  }
@@ -87,4 +87,5 @@ rm {
  }
 
  output "vm_public_ips" {
-   value = aws_instance.web[*].public_i
+   value = aws_instance.web[*].public_ip
+}
