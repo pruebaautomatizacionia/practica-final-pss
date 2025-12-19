@@ -1,5 +1,42 @@
 
-hosts: all
-become: true
-gather_facts: false
-tasks: []
+---
+- hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Ensure SQL package is installed
+      package:
+        name: mariadb-server
+        state: present
+
+    - name: Ensure MariaDB service is started and enabled
+      service:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Set up root password for MariaDB
+      community.mysql.mysql_user:
+        name: root
+        host: localhost
+        password: vault_mysql_root_password
+        state: present
+      when: vault_mysql_root_password is defined
+
+    - name: Create database for international transfer project
+      community.mysql.mysql_db:
+        name: international_transfer_db
+        state: present
+        login_user: root
+        login_password: vault_mysql_root_password
+      when: vault_mysql_root_password is defined
+
+    - name: Create user for international transfer project
+      community.mysql.mysql_user:
+        name: international_transfer_user
+        password: vault_international_transfer_user_password
+        priv: "international_transfer_db.*:ALL"
+        state: present
+        login_user: root
+        login_password: vault_mysql_root_password
+      when: vault_mysql_root_password is defined and vault_international_transfer_user_password is defined
