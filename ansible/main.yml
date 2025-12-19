@@ -3,58 +3,58 @@
   become: yes
   remote_user: ubuntu
 
-tasks:
-- name: Install packages
-  apt:
-    update_cache: yes
-    package_list:
-      - mysql-server
-      - mariadb-server
-      - openjdk-8-jdk
-      - apache2
-      - vim
+  tasks:
+  - name: Install packages
+    apt:
+      update_cache: yes
+      package_list:
+        - mysql-server
+        - mariadb-server
+        - openjdk-8-jdk
+        - apache2
+        - vim
 
-- name: Copy mysql root password
-  copy:
-    dest: /etc/mysql/debian.cnf
-    content: 'root_password={{ mysql_root_password }}'
-    mode: '0644'
+  - name: Copy mysql root password
+    copy:
+      dest: /etc/mysql/debian.cnf
+      content: 'root_password={{ mysql_root_password }}'
+      mode: '0644'
 
-- name: Create MySQL database and user for transfer project
-  community.general.mysqluser:
-    name: transfer_admin
-    password: '{{ mysql_transfer_admin_password }}'
-    privileges: ALL
-    dbname: 'transfer'
-    state: present
+  - name: Create MySQL database and user for transfer project
+    community.general.mysqluser:
+      name: transfer_admin
+      password: '{{ mysql_transfer_admin_password }}'
+      privileges: ALL
+      dbname: 'transfer'
+      state: present
 
-- name: Update MariaDB/MySQL configuration to use new user and database for transfer project
-  community.general.mysqlconfig:
-    dbname: 'transfer'
-    username: 'transfer_admin'
-    password: '{{ mysql_transfer_admin_password }}'
-    privs: ALL
-    state: present
+  - name: Update MariaDB/MySQL configuration to use new user and database for transfer project
+    community.general.mysqlconfig:
+      dbname: 'transfer'
+      username: 'transfer_admin'
+      password: '{{ mysql_transfer_admin_password }}'
+      privs: ALL
+      state: present
 
-- name: Restart MySQL services for changes to take effect
-  service:
-    name: mysql
-    state: restarted
+  - name: Restart MySQL services for changes to take effect
+    service:
+      name: mysql
+      state: restarted
 
-- name: Create local transfer project directory
-  file:
-    path: /var/www/transfer
-    state: directory
-    mode: '0755'
+  - name: Create local transfer project directory
+    file:
+      path: /var/www/transfer
+      state: directory
+      mode: '0755'
 
-- name: Copy transfer project files to web server
-  copy:
-    src: /path/to/your/project/files
-    dest: '/var/www/transfer/'
-    mode: '0644'
-    recurse: yes
+  - name: Copy transfer project files to web server
+    copy:
+      src: /path/to/your/project/files
+      dest: '/var/www/transfer/'
+      mode: '0644'
+      recurse: yes
 
-- name: Restart Apache service for changes to take effect
-  service:
-    name: apache2
-    state: restar
+  - name: Restart Apache service for changes to take effect
+    service:
+      name: apache2
+      state: restart
