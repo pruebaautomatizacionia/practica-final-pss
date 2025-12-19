@@ -11,12 +11,10 @@ terraform {
  }
 
  data "aws_subnets" "default" {
-   vpc_id = data.aws_vpc.default.id
-
-   filter {
-     name   = "tag:Name"
-     values = ["vpc-transferencia"]
-   }
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
  }
 
  variable "key_name" {
