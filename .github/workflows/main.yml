@@ -14,9 +14,11 @@ on:
           - terraform_destroy
           - ansible_only
           - full_deploy
+
 permissions:
   contents: write
   pull-requests: write
+
 jobs:
   devops-job:
     runs-on: ubuntu-latest
@@ -38,15 +40,14 @@ jobs:
         run: terraform init
         working-directory: ./terraform
 
-      # --- LOGICA DE PLAN Y REPORTE A N8N ---
+      # --- LÓGICA DE TERRAFORM PLAN ---
       - name: Terraform Plan
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
-        id: plan
         run: |
           terraform plan -no-color > plan_output.txt
           cat plan_output.txt
         working-directory: ./terraform
-        
+
       - name: Save Plan Output to Repo
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
         run: |
@@ -56,49 +57,48 @@ jobs:
           git commit -m "bot: update terraform plan output [skip ci]" || echo "No changes to commit"
           git push
 
-      # --- LOGICA DE EJECUCIÓN ---
+      # --- LÓGICA DE TERRAFORM APPLY ---
       - name: Terraform Apply
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
-        run: |
-          terraform apply -auto-approve -no-color | tee apply_output.txt
+        run: terraform apply -auto-approve -no-color
         working-directory: ./terraform
-      - name: Save Apply Output to Repo
-        if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add terraform/apply_output.txt
-          git commit -m "bot: update terraform apply output [skip ci]" || echo "No changes to commit"
-          git push
-          
+
+      # --- LÓGICA DE TERRAFORM DESTROY ---
       - name: Terraform Destroy
         if: github.event.inputs.accion == 'terraform_destroy'
         run: terraform destroy -auto-approve
         working-directory: ./terraform
 
-      # --- GESTIÓN DE IPS (Extrae de S3 incluso en ansible_only) ---
-      #- name: Obtener IPs desde Backend S3
-      #  id: get_ips
-      #  if: contains(fromJson('["ansible_only", "full_deploy", "terraform_apply"]'), github.event.inputs.accion)
-      #  run: |
-      #    # Al estar el init hecho, output lee el estado actual en S3
-      #    IP_JSON=$(terraform output -json vm_public_ips || echo "[]")
-      #    echo "vm_ips=$IP_JSON" >> $GITHUB_OUTPUT
-      #  working-directory: ./terraform
+      # --- GESTIÓN DE IPS DINÁMICAS (Para Ansible) ---
+      - name: Extraer IPs del State de S3
+        id: get_ips
+        if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
+        run: |
+          # Extraemos las IPs del output de Terraform
+          # jq -r '.[]' las convierte en una lista limpia por líneas
+          IPS=$(terraform output -json vm_public_ips | jq -r '.[]')
+          
+          # Guardamos las IPs en el output del step para usarlo en el inventario de Ansible
+          echo "lista_ips<<EOF" >> $GITHUB_OUTPUT
+          echo "$IPS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        working-directory: ./terraform
+
+      # --- PREPARACIÓN DE ANSIBLE ---
+      - name: Install Ansible collections
+        if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
+        run: ansible-galaxy collection install community.general
 
       # --- EJECUCIÓN DE ANSIBLE ---
-      - name: Install Ansible collections
-        run: ansible-galaxy collection install community.general
-      # Usamos el archivo que n8n ha creado y subido al repositorio
       - name: Ejecutar Ansible Playbook
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
         uses: dawidd6/action-ansible-playbook@v2
         with:
           playbook: ansible/main.yml
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          #inventory: ${{ github.workspace }}/.ansible_inventory
+          # El inventario se construye con las IPs obtenidas dinámicamente
           inventory: |
             [transfer_vms]
-            16.171.238.249
-            13.48.26.95
-            16.16.207.119
+            ${{ steps.get_ips.outputs.lista_ips }}
+          options: |
+            --extra-vars "ansible_ssh_user=ubuntu"
