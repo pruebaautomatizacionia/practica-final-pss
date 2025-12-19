@@ -87,6 +87,8 @@ jobs:
       #  working-directory: ./terraform
 
       # --- EJECUCIÓN DE ANSIBLE ---
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install community.general
       # Usamos el archivo que n8n ha creado y subido al repositorio
       - name: Ejecutar Ansible Playbook
         if: github.event.inputs.accion == 'ansible_only' || github.event.inputs.accion == 'full_deploy'
