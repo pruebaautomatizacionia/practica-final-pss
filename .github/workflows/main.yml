@@ -59,10 +59,24 @@ jobs:
       - name: Terraform Plan
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
         run: |
-          terraform plan -out=tfplan -no-color
-          terraform show -no-color tfplan > plan_output.txt
-          grep -A20 "Plan:" plan_output.txt
+          set +e
+          terraform plan -detailed-exitcode -no-color -out=tfplan
+          exitcode=$?
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
 
+          if [ $exitcode -eq 0 ]; then
+            echo "No changes detected"
+          elif [ $exitcode -eq 2 ]; then
+            echo "Changes detected"
+            terraform show -no-color tfplan > plan_output.txt
+            grep -A20 "Plan:" plan_output.txt
+          else
+            echo "Terraform plan failed"
+            exit 1
+          fi
+
+          exit 0
+    
         working-directory: ./terraform
         
       - name: Upload Terraform Plan Artifact
