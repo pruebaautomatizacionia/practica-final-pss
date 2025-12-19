@@ -44,9 +44,19 @@ jobs:
       - name: Terraform Plan
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
         run: |
-          terraform plan -no-color > plan_output.txt
+          terraform plan -out=tfplan -no-color
+          terraform show -no-color tfplan > plan_output.txt
           cat plan_output.txt
         working-directory: ./terraform
+        
+      - name: Upload Terraform Plan Artifact
+        if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform/tfplan
+        working-directory: ./terraform
+
 
       - name: Save Plan Output to Repo
         if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
@@ -58,9 +68,16 @@ jobs:
           git push
 
       # --- LÓGICA DE TERRAFORM APPLY ---
+      - name: Download Terraform Plan Artifact
+        if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform
+          
       - name: Terraform Apply
         if: github.event.inputs.accion == 'terraform_apply' || github.event.inputs.accion == 'full_deploy'
-        run: terraform apply -auto-approve -no-color
+        run: terraform apply -auto-approve tfplan
         working-directory: ./terraform
 
       # --- LÓGICA DE TERRAFORM DESTROY ---
