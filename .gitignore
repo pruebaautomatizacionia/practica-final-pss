@@ -17,3 +17,7 @@ crash.log
 
 # Directorios de módulos locales (si los usas)
 .terraform/modules
+*.tfplan
+*.tfstate
+*.tfstate.backup
+*.tfvars
