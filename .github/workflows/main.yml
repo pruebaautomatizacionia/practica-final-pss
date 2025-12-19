@@ -81,7 +81,7 @@ jobs:
         working-directory: ./terraform
         
       - name: Upload Terraform Plan Artifact
-        if: steps.Terraform_Plan.outputs.PLAN_CHANGES == 'false'
+        if: github.event.inputs.accion == 'terraform_plan' || github.event.inputs.accion == 'full_deploy'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
