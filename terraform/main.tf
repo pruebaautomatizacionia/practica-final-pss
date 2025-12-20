@@ -1,44 +1,13 @@
 resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
 
   tags = {
-    Name        = "${var.project}-${var.environment}-vpc"
-    Environment = var.environment
-    Project     = var.project
-    Owner       = var.owner
+    Name = "${var.project}-vpc"
   }
 }
 
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name        = "${var.project}-${var.environment}-igw"
-    Environment = var.environment
-    Project     = var.project
-    Owner       = var.owner
-  }
-}
-
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name        = "${var.project}-${var.environment}-public-rt"
-    Environment = var.environment
-    Project     = var.project
-    Owner       = var.owner
-  }
-}
-
-data "aws_availability_zones" "available" {
-  state = "available"
-}
+data "aws_availability_zones" "available" {}
 
 resource "aws_subnet" "public_1" {
   vpc_id                  = aws_vpc.main.id
@@ -47,10 +16,7 @@ resource "aws_subnet" "public_1" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "${var.project}-${var.environment}-public-subnet-1"
-    Environment = var.environment
-    Project     = var.project
-    Owner       = var.owner
+    Name = "${var.project}-public-1"
   }
 }
 
@@ -61,30 +27,16 @@ resource "aws_subnet" "public_2" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "${var.project}-${var.environment}-public-subnet-2"
-    Environment = var.environment
-    Project     = var.project
-    Owner       = var.owner
+    Name = "${var.project}-public-2"
   }
 }
 
-resource "aws_route_table_association" "public_1" {
-  subnet_id      = aws_subnet.public_1.id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "public_2" {
-  subnet_id      = aws_subnet.public_2.id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_security_group" "instance_sg" {
-  name        = "${var.project}-${var.environment}-instance-sg"
-  description = "Allow SSH and HTTP inbound traffic"
+resource "aws_security_group" "web_sg" {
   vpc_id      = aws_vpc.main.id
+  name        = "${var.project}-web-sg"
+  description = "Allow SSH and HTTP inbound traffic"
 
   ingress {
-    description = "SSH from VPC"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -92,7 +44,6 @@ resource "aws_security_group" "instance_sg" {
   }
 
   ingress {
-    description = "HTTP from anywhere"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -107,10 +58,7 @@ resource "aws_security_group" "instance_sg" {
   }
 
   tags = {
-    Name        = "${var.project}-${var.environment}-instance-sg"
-    Environment = var.environment
-    Project     = var.project
-    Owner       = var.owner
+    Name = "${var.project}-web-sg"
   }
 }
 
@@ -123,32 +71,18 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_instance" "vm_1" {
+resource "aws_instance" "web_server" {
+  count                  = 3
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.public_1.id
+  subnet_id              = count.index % 2 == 0 ? aws_subnet.public_1.id : aws_subnet.public_2.id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
   key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.instance_sg.id]
 
   tags = {
-    Name        = "${var.project}-${var.environment}-vm-1"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
-  }
-}
-
-resource "aws_instance" "vm_2" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.public_2.id
-  key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.instance_sg.id]
-
-  tags = {
-    Name        = "${var.project}-${var.environment}-vm-2"
-    Environment = var.environment
-    Project     = var.project
-    Owner       = var.owner
+    Name        = "${var.project}-web-${count.index + 1}"
   }
 }
