@@ -2,24 +2,12 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Install SQL database package
+    - name: Install SQL database
       package:
         name: mariadb-server
         state: present
-    - name: Ensure SQL database service is running
+    - name: Start SQL database service
       service:
         name: mariadb
         state: started
         enabled: true
-    - name: Create database for international transfer
-      community.mysql.mysql_db:
-        name: international_transfer_db
-        state: present
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-    - name: Create user for international transfer database
-      community.mysql.mysql_user:
-        name: transfer_user
-        password: 'your_strong_password'
-        priv: 'international_transfer_db.*:ALL'
-        state: present
-        login_unix_socket: /var/run/mysqld/mysqld.sock
