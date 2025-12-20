@@ -1,7 +1,10 @@
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
+
   tags = {
-    Name = "${var.project}-vpc"
+    Environment = var.environment
+    Project     = var.project
+    Owner       = var.owner
   }
 }
 
@@ -14,8 +17,11 @@ resource "aws_subnet" "public_1" {
   cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 0)
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
+
   tags = {
-    Name = "${var.project}-public-subnet-1"
+    Environment = var.environment
+    Project     = var.project
+    Owner       = var.owner
   }
 }
 
@@ -24,18 +30,21 @@ resource "aws_subnet" "public_2" {
   cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 1)
   availability_zone       = data.aws_availability_zones.available.names[1]
   map_public_ip_on_launch = true
+
   tags = {
-    Name = "${var.project}-public-subnet-2"
+    Environment = var.environment
+    Project     = var.project
+    Owner       = var.owner
   }
 }
 
-resource "aws_security_group" "web_sg" {
-  name        = "${var.project}-web-sg"
-  description = "Allow SSH and HTTP inbound traffic"
+resource "aws_security_group" "web_ssh" {
+  name        = "${var.project}-web-ssh-sg"
+  description = "Allow HTTP and SSH inbound traffic"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH from VPC"
+    description = "SSH access"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -43,7 +52,7 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    description = "HTTP from VPC"
+    description = "HTTP access"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -58,7 +67,9 @@ resource "aws_security_group" "web_sg" {
   }
 
   tags = {
-    Name = "${var.project}-web-sg"
+    Environment = var.environment
+    Project     = var.project
+    Owner       = var.owner
   }
 }
 
@@ -71,30 +82,45 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_instance" "web_server_1" {
+resource "aws_instance" "vm_1" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.public_1.id
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
+  vpc_security_group_ids = [aws_security_group.web_ssh.id]
   key_name               = var.key_name
 
   tags = {
-    Name        = "${var.project}-web-server-1"
+    Name        = "${var.project}-vm-1"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
   }
 }
 
-resource "aws_instance" "web_server_2" {
+resource "aws_instance" "vm_2" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.public_2.id
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
+  vpc_security_group_ids = [aws_security_group.web_ssh.id]
   key_name               = var.key_name
 
   tags = {
-    Name        = "${var.project}-web-server-2"
+    Name        = "${var.project}-vm-2"
+    Environment = var.environment
+    Project     = var.project
+    Owner       = var.owner
+  }
+}
+
+resource "aws_instance" "vm_3" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public_1.id
+  vpc_security_group_ids = [aws_security_group.web_ssh.id]
+  key_name               = var.key_name
+
+  tags = {
+    Name        = "${var.project}-vm-3"
     Environment = var.environment
     Project     = var.project
     Owner       = var.owner
