@@ -47,13 +47,13 @@ Terraform will perform the following actions:
       + subnet_id                            = (known after apply)
       + tags                                 = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-vm-1"
+          + "Name"        = "prueba-dev-vm-1"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                             = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-vm-1"
+          + "Name"        = "prueba-dev-vm-1"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -129,13 +129,13 @@ Terraform will perform the following actions:
       + subnet_id                            = (known after apply)
       + tags                                 = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-vm-2"
+          + "Name"        = "prueba-dev-vm-2"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                             = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-vm-2"
+          + "Name"        = "prueba-dev-vm-2"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -169,92 +169,76 @@ Terraform will perform the following actions:
       + root_block_device (known after apply)
     }
 
-  # aws_instance.vm_3 will be created
-  + resource "aws_instance" "vm_3" {
-      + ami                                  = "ami-0c33fcb753a7176f6"
-      + arn                                  = (known after apply)
-      + associate_public_ip_address          = (known after apply)
-      + availability_zone                    = (known after apply)
-      + disable_api_stop                     = (known after apply)
-      + disable_api_termination              = (known after apply)
-      + ebs_optimized                        = (known after apply)
-      + enable_primary_ipv6                  = (known after apply)
-      + force_destroy                        = false
-      + get_password_data                    = false
-      + host_id                              = (known after apply)
-      + host_resource_group_arn              = (known after apply)
-      + iam_instance_profile                 = (known after apply)
-      + id                                   = (known after apply)
-      + instance_initiated_shutdown_behavior = (known after apply)
-      + instance_lifecycle                   = (known after apply)
-      + instance_state                       = (known after apply)
-      + instance_type                        = "t3.micro"
-      + ipv6_address_count                   = (known after apply)
-      + ipv6_addresses                       = (known after apply)
-      + key_name                             = "n8nclaves"
-      + monitoring                           = (known after apply)
-      + outpost_arn                          = (known after apply)
-      + password_data                        = (known after apply)
-      + placement_group                      = (known after apply)
-      + placement_group_id                   = (known after apply)
-      + placement_partition_number           = (known after apply)
-      + primary_network_interface_id         = (known after apply)
-      + private_dns                          = (known after apply)
-      + private_ip                           = (known after apply)
-      + public_dns                           = (known after apply)
-      + public_ip                            = (known after apply)
-      + region                               = "eu-north-1"
-      + secondary_private_ips                = (known after apply)
-      + security_groups                      = (known after apply)
-      + source_dest_check                    = true
-      + spot_instance_request_id             = (known after apply)
-      + subnet_id                            = (known after apply)
-      + tags                                 = {
+  # aws_internet_gateway.main will be created
+  + resource "aws_internet_gateway" "main" {
+      + arn      = (known after apply)
+      + id       = (known after apply)
+      + owner_id = (known after apply)
+      + region   = "eu-north-1"
+      + tags     = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-vm-3"
+          + "Name"        = "prueba-dev-igw"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
-      + tags_all                             = {
+      + tags_all = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-vm-3"
+          + "Name"        = "prueba-dev-igw"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
-      + tenancy                              = (known after apply)
-      + user_data_base64                     = (known after apply)
-      + user_data_replace_on_change          = false
-      + vpc_security_group_ids               = (known after apply)
-
-      + capacity_reservation_specification (known after apply)
-
-      + cpu_options (known after apply)
-
-      + ebs_block_device (known after apply)
-
-      + enclave_options (known after apply)
-
-      + ephemeral_block_device (known after apply)
-
-      + instance_market_options (known after apply)
-
-      + maintenance_options (known after apply)
-
-      + metadata_options (known after apply)
-
-      + network_interface (known after apply)
-
-      + primary_network_interface (known after apply)
-
-      + private_dns_name_options (known after apply)
-
-      + root_block_device (known after apply)
+      + vpc_id   = (known after apply)
     }
 
-  # aws_security_group.web_ssh will be created
-  + resource "aws_security_group" "web_ssh" {
+  # aws_route_table.public will be created
+  + resource "aws_route_table" "public" {
+      + arn              = (known after apply)
+      + id               = (known after apply)
+      + owner_id         = (known after apply)
+      + propagating_vgws = (known after apply)
+      + region           = "eu-north-1"
+      + route            = [
+          + {
+              + cidr_block                 = "0.0.0.0/0"
+              + gateway_id                 = (known after apply)
+                # (11 unchanged attributes hidden)
+            },
+        ]
+      + tags             = {
+          + "Environment" = "dev"
+          + "Name"        = "prueba-dev-public-rt"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
+        }
+      + tags_all         = {
+          + "Environment" = "dev"
+          + "Name"        = "prueba-dev-public-rt"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
+        }
+      + vpc_id           = (known after apply)
+    }
+
+  # aws_route_table_association.public_1 will be created
+  + resource "aws_route_table_association" "public_1" {
+      + id             = (known after apply)
+      + region         = "eu-north-1"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # aws_route_table_association.public_2 will be created
+  + resource "aws_route_table_association" "public_2" {
+      + id             = (known after apply)
+      + region         = "eu-north-1"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # aws_security_group.instance_sg will be created
+  + resource "aws_security_group" "instance_sg" {
       + arn                    = (known after apply)
-      + description            = "Allow HTTP and SSH inbound traffic"
+      + description            = "Allow SSH and HTTP inbound traffic"
       + egress                 = [
           + {
               + cidr_blocks      = [
@@ -276,7 +260,7 @@ Terraform will perform the following actions:
               + cidr_blocks      = [
                   + "0.0.0.0/0",
                 ]
-              + description      = "HTTP access"
+              + description      = "HTTP from anywhere"
               + from_port        = 80
               + ipv6_cidr_blocks = []
               + prefix_list_ids  = []
@@ -289,7 +273,7 @@ Terraform will perform the following actions:
               + cidr_blocks      = [
                   + "0.0.0.0/0",
                 ]
-              + description      = "SSH access"
+              + description      = "SSH from VPC"
               + from_port        = 22
               + ipv6_cidr_blocks = []
               + prefix_list_ids  = []
@@ -299,18 +283,20 @@ Terraform will perform the following actions:
               + to_port          = 22
             },
         ]
-      + name                   = "prueba-web-ssh-sg"
+      + name                   = "prueba-dev-instance-sg"
       + name_prefix            = (known after apply)
       + owner_id               = (known after apply)
       + region                 = "eu-north-1"
       + revoke_rules_on_delete = false
       + tags                   = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-instance-sg"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all               = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-instance-sg"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -336,11 +322,13 @@ Terraform will perform the following actions:
       + region                                         = "eu-north-1"
       + tags                                           = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-public-subnet-1"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                                       = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-public-subnet-1"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -366,11 +354,13 @@ Terraform will perform the following actions:
       + region                                         = "eu-north-1"
       + tags                                           = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-public-subnet-2"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                                       = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-public-subnet-2"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -398,14 +388,16 @@ Terraform will perform the following actions:
       + region                               = "eu-north-1"
       + tags                                 = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-vpc"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                             = {
           + "Environment" = "dev"
+          + "Name"        = "prueba-dev-vpc"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
     }
 
-Plan: 7 to add, 0 to change, 0 to destroy.
+Plan: 10 to add, 0 to change, 0 to destroy.
