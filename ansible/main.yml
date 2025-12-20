@@ -1,8 +1,8 @@
-: all
+- hosts: all
   become: true
   gather_facts: false
   tasks:
-    - name: Install SQL database package
+    - name: Install SQL database server
       package:
         name: mariadb-server
         state: present
@@ -11,15 +11,3 @@
         name: mariadb
         state: started
         enabled: true
-    - name: Create database for international transfer project
-      mysql_db:
-        name: international_transfer_db
-        state: present
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-    - name: Create a user for the international transfer project database
-      mysql_user:
-        name: transfer_user
-        password: changeme_in_production
-        priv: "international_transfer_db.*:ALL"
-        state: present
-        login_unix_socket: /var/run/mysqld/mysqld.so
