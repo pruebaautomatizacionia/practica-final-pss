@@ -1,13 +1,15 @@
-: all
-  become: true
-  gather_facts: false
-  tasks:
-    - name: Install SQL database
-      package:
-        name: mariadb-server
-        state: present
-    - name: Ensure SQL service is running and enabled
-      service:
-        name: mariadb
-        state: started
-        enabled: t
+```yaml
+hosts: all
+become: true
+gather_facts: false
+tasks:
+  - name: Install SQL database package
+    package:
+      name: mariadb-server
+      state: present
+  - name: Ensure SQL service is started and enabled
+    service:
+      name: mariadb
+      state: started
+      enabled: true
+```
