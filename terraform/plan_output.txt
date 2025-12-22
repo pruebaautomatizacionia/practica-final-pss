@@ -5,8 +5,8 @@ plan. Resource actions are indicated with the following symbols:
 
 Terraform will perform the following actions:
 
-  # aws_instance.web[0] will be created
-  + resource "aws_instance" "web" {
+  # aws_instance.web_server[0] will be created
+  + resource "aws_instance" "web_server" {
       + ami                                  = "ami-0c33fcb753a7176f6"
       + arn                                  = (known after apply)
       + associate_public_ip_address          = (known after apply)
@@ -47,13 +47,13 @@ Terraform will perform the following actions:
       + subnet_id                            = (known after apply)
       + tags                                 = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-server-1"
+          + "Name"        = "prueba-web-server-1"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                             = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-server-1"
+          + "Name"        = "prueba-web-server-1"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -87,8 +87,8 @@ Terraform will perform the following actions:
       + root_block_device (known after apply)
     }
 
-  # aws_instance.web[1] will be created
-  + resource "aws_instance" "web" {
+  # aws_instance.web_server[1] will be created
+  + resource "aws_instance" "web_server" {
       + ami                                  = "ami-0c33fcb753a7176f6"
       + arn                                  = (known after apply)
       + associate_public_ip_address          = (known after apply)
@@ -129,13 +129,13 @@ Terraform will perform the following actions:
       + subnet_id                            = (known after apply)
       + tags                                 = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-server-2"
+          + "Name"        = "prueba-web-server-2"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                             = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-server-2"
+          + "Name"        = "prueba-web-server-2"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -169,8 +169,8 @@ Terraform will perform the following actions:
       + root_block_device (known after apply)
     }
 
-  # aws_instance.web[2] will be created
-  + resource "aws_instance" "web" {
+  # aws_instance.web_server[2] will be created
+  + resource "aws_instance" "web_server" {
       + ami                                  = "ami-0c33fcb753a7176f6"
       + arn                                  = (known after apply)
       + associate_public_ip_address          = (known after apply)
@@ -211,13 +211,13 @@ Terraform will perform the following actions:
       + subnet_id                            = (known after apply)
       + tags                                 = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-server-3"
+          + "Name"        = "prueba-web-server-3"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
       + tags_all                             = {
           + "Environment" = "dev"
-          + "Name"        = "prueba-server-3"
+          + "Name"        = "prueba-web-server-3"
           + "Owner"       = "automacion"
           + "Project"     = "prueba"
         }
@@ -251,10 +251,10 @@ Terraform will perform the following actions:
       + root_block_device (known after apply)
     }
 
-  # aws_security_group.allow_ssh_http will be created
-  + resource "aws_security_group" "allow_ssh_http" {
+  # aws_security_group.web_sg will be created
+  + resource "aws_security_group" "web_sg" {
       + arn                    = (known after apply)
-      + description            = "prueba Security Group"
+      + description            = "Allow SSH and HTTP inbound traffic"
       + egress                 = [
           + {
               + cidr_blocks      = [
@@ -276,20 +276,6 @@ Terraform will perform the following actions:
               + cidr_blocks      = [
                   + "0.0.0.0/0",
                 ]
-              + description      = "HTTP from anywhere"
-              + from_port        = 80
-              + ipv6_cidr_blocks = []
-              + prefix_list_ids  = []
-              + protocol         = "tcp"
-              + security_groups  = []
-              + self             = false
-              + to_port          = 80
-            },
-          + {
-              + cidr_blocks      = [
-                  + "0.0.0.0/0",
-                ]
-              + description      = "SSH from anywhere"
               + from_port        = 22
               + ipv6_cidr_blocks = []
               + prefix_list_ids  = []
@@ -297,18 +283,38 @@ Terraform will perform the following actions:
               + security_groups  = []
               + self             = false
               + to_port          = 22
+                # (1 unchanged attribute hidden)
+            },
+          + {
+              + cidr_blocks      = [
+                  + "0.0.0.0/0",
+                ]
+              + from_port        = 80
+              + ipv6_cidr_blocks = []
+              + prefix_list_ids  = []
+              + protocol         = "tcp"
+              + security_groups  = []
+              + self             = false
+              + to_port          = 80
+                # (1 unchanged attribute hidden)
             },
         ]
-      + name                   = "prueba-sg"
+      + name                   = "prueba-web-sg"
       + name_prefix            = (known after apply)
       + owner_id               = (known after apply)
       + region                 = "eu-north-1"
       + revoke_rules_on_delete = false
       + tags                   = {
-          + "Name" = "prueba-sg"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-web-sg"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
       + tags_all               = {
-          + "Name" = "prueba-sg"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-web-sg"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
       + vpc_id                 = (known after apply)
     }
@@ -331,10 +337,16 @@ Terraform will perform the following actions:
       + private_dns_hostname_type_on_launch            = (known after apply)
       + region                                         = "eu-north-1"
       + tags                                           = {
-          + "Name" = "prueba-public-subnet-1"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-public-subnet-1"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
       + tags_all                                       = {
-          + "Name" = "prueba-public-subnet-1"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-public-subnet-1"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
       + vpc_id                                         = (known after apply)
     }
@@ -357,10 +369,16 @@ Terraform will perform the following actions:
       + private_dns_hostname_type_on_launch            = (known after apply)
       + region                                         = "eu-north-1"
       + tags                                           = {
-          + "Name" = "prueba-public-subnet-2"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-public-subnet-2"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
       + tags_all                                       = {
-          + "Name" = "prueba-public-subnet-2"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-public-subnet-2"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
       + vpc_id                                         = (known after apply)
     }
@@ -385,10 +403,16 @@ Terraform will perform the following actions:
       + owner_id                             = (known after apply)
       + region                               = "eu-north-1"
       + tags                                 = {
-          + "Name" = "prueba-vpc"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-vpc"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
       + tags_all                             = {
-          + "Name" = "prueba-vpc"
+          + "Environment" = "dev"
+          + "Name"        = "prueba-vpc"
+          + "Owner"       = "automacion"
+          + "Project"     = "prueba"
         }
     }
 
