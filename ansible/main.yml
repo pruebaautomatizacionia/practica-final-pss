@@ -2,12 +2,47 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Install SQL database
+    - name: Ensure Apache is installed
+      package:
+        name: apache2
+        state: present
+    - name: Ensure Apache is running and enabled
+      service:
+        name: apache2
+        state: started
+        enabled: true
+    - name: Deploy a simple index.html
+      copy:
+        content: |
+          <html>
+          <body>
+          <h1>Hello from Ansible!</h1>
+          </body>
+          </html>
+        dest: /var/www/html/index.html
+        owner: www-data
+        group: www-data
+        mode: '0644'
+    - name: Ensure a database service is installed (generic)
       package:
         name: mariadb-server
         state: present
-    - name: Start SQL database service
+    - name: Ensure a database service is running (generic)
       service:
         name: mariadb
         state: started
         enabled: true
+    - name: Create a database (placeholder)
+      command: echo "CREATE DATABASE prueba;" | mysql -u root -psecretpassword
+      args:
+        creates: /var/lib/mysql/prueba
+      when: false
+    - name: Create a user for the database (placeholder)
+      command: echo "CREATE USER 'prueba_user'@'localhost' IDENTIFIED BY 'secretpassword';" | mysql -u root -psecretpassword
+      when: false
+    - name: Grant privileges to the user (placeholder)
+      command: echo "GRANT ALL PRIVILEGES ON prueba.* TO 'prueba_user'@'localhost';" | mysql -u root -psecretpassword
+      when: false
+    - name: Flush privileges (placeholder)
+      command: mysql -u root -psecretpassword -e "FLUSH PRIVILEGES;"
+      when: false
